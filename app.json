@@ -39,6 +39,13 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow MemeCam to save memes to your photos.",
+          "savePhotosPermission": "Allow MemeCam to save memes to your photos."
+        }
       ]
     ],
     "experiments": {

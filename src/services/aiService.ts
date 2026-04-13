@@ -13,7 +13,11 @@ export interface MemeLines {
  * Generates 4 lines of meme text (2 top, 2 bottom) for a given image URI.
  * Uses OpenRouter for AI processing.
  */
-export const generateMemeLines = async (imageUri: string): Promise<MemeLines> => {
+export const generateMemeLines = async (
+  imageUri: string, 
+  style: string = 'Funny', 
+  language: string = 'English'
+): Promise<MemeLines> => {
   if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY === 'sk-or-v1-your-key-here') {
     // Fallback if API key is not configured
     return {
@@ -33,8 +37,25 @@ export const generateMemeLines = async (imageUri: string): Promise<MemeLines> =>
     console.log('Base64 Conversion: SUCCESS (Length:', base64Data.length, ')');
 
     // 2. Prepare the prompt and payload
+    const styleDescription = style === 'Roast' 
+      ? 'Savage, insulting (in a funny way), and high-energy roast.' 
+      : style === 'Dark' 
+      ? 'Edgy, cynical, and dark humor.'
+      : style === 'Cute'
+      ? 'Wholesome, sweet, and adorable.'
+      : 'Humorous, witty, and lighthearted.';
+
+    const languageInstruction = language === 'Hinglish'
+      ? 'Write the captions specifically in Hinglish (Hindi written in Roman/English script).'
+      : language === 'English'
+      ? 'Write the captions in English.'
+      : `Write the captions in ${language} (using its native script).`;
+
     const prompt = `
-      Analyze this image and generate a hilarious, viral meme caption for it.
+      Analyze this image and generate a ${style.toUpperCase()} meme caption for it.
+      Vibe/Style: ${styleDescription}
+      Language: ${languageInstruction}
+
       You MUST provide exactly 4 short, punchy lines:
       - Two distinct lines for the TOP of the meme.
       - Two distinct lines for the BOTTOM of the meme.

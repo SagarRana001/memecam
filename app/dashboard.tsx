@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, FlatList, Image, Pressable, Dimensions, ActivityIndicator } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Plus, User, ChevronRight, Zap, Image as ImageIcon } from 'lucide-react-native';
 import { Colors } from '@/constants/theme';
 import { getMemeHistory, MemeItem } from '@/src/utils/historyManager';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { ChevronRight, Image as ImageIcon, Plus, User, Zap } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Dimensions, FlatList, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 48) / 2;
@@ -30,11 +31,11 @@ export default function DashboardScreen() {
   );
 
   const renderItem = ({ item, index }: { item: MemeItem, index: number }) => (
-    <Animated.View 
+    <Animated.View
       entering={FadeInUp.delay(index * 50).springify().damping(12)}
       style={styles.cardContainer}
     >
-      <Pressable 
+      <Pressable
         style={styles.memeCard}
         onPress={() => router.push({ pathname: '/result', params: { uri: item.url } })}
       >
@@ -97,11 +98,11 @@ export default function DashboardScreen() {
       )}
 
       {/* Floating Action Button */}
-      <Animated.View 
+      <Animated.View
         entering={FadeInDown.delay(400).springify()}
         style={styles.fabContainer}
       >
-        <Pressable 
+        <Pressable
           style={styles.fab}
           onPress={() => router.push('/generator')}
         >
@@ -117,6 +118,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0A0A0A',
+    ...Platform.select({
+      web: {
+        height: '100dvh',
+      },
+    }),
   },
   header: {
     paddingHorizontal: 24,

@@ -1,8 +1,12 @@
-import React, { useState, useCallback } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, Image, Pressable, Share, Dimensions, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback, useRef } from 'react';
+import { StyleSheet, Text, View, Image, Pressable, Share, Dimensions, ActivityIndicator, Alert, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
-import { X, Share2, Home, RotateCcw } from 'lucide-react-native';
+import { X, Share2, Home, RotateCcw, Download, Check } from 'lucide-react-native';
+import ViewShot from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
 import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
 import { generateMemeLines } from '@/src/services/aiService';
@@ -11,19 +15,29 @@ const { width } = Dimensions.get('window');
 
 export default function ResultScreen() {
   const router = useRouter();
-  const { uri, top, bottom } = useLocalSearchParams<{ uri: string, top: string, bottom: string }>();
+  const { uri, top, bottom, style, language } = useLocalSearchParams<{ 
+    uri: string, 
+    top: string, 
+    bottom: string,
+    style: string,
+    language: string 
+  }>();
+
+  const viewShotRef = useRef<ViewShot>(null);
 
   // State for dynamic meme text
   const [topLines, setTopLines] = useState<string[]>(top ? JSON.parse(top) : ['MEME COMES HERE', 'IN 2 LINES']);
   const [bottomLines, setBottomLines] = useState<string[]>(bottom ? JSON.parse(bottom) : ['AND HERE IN', 'TWO LINES']);
   const [isReloading, setIsReloading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
 
   // Re-generate AI text for the same image
   const handleReload = async () => {
     if (!uri) return;
     try {
       setIsReloading(true);
-      const newLines = await generateMemeLines(uri);
+      const newLines = await generateMemeLines(uri, style || 'Funny', language || 'English');
       setTopLines(newLines.top);
       setBottomLines(newLines.bottom);
     } catch (error) {
@@ -35,12 +49,56 @@ export default function ResultScreen() {
 
   const handleShare = async () => {
     try {
-      await Share.share({
-        message: `Check out this FIRE meme! 🔥\n\n${topLines.join(' ')}\n${bottomLines.join(' ')}`,
-        url: uri,
-      });
+      if (!viewShotRef.current?.capture) return;
+      
+      const captureUri = await viewShotRef.current.capture();
+      
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(captureUri, {
+          mimeType: 'image/jpeg',
+          dialogTitle: 'Share your FIRE meme!',
+          UTI: 'public.jpeg',
+        });
+      } else {
+        // Fallback to basic text share if Sharing is not available
+        await Share.share({
+          message: `Check out this FIRE meme! 🔥\n\n${topLines.join(' ')}\n${bottomLines.join(' ')}`,
+          url: uri,
+        });
+      }
     } catch (error) {
-      console.error(error);
+      console.error('Sharing failed:', error);
+      Alert.alert('Share Failed', 'Could not share the meme image.');
+    }
+  };
+
+  const handleSaveToGallery = async () => {
+    try {
+      setIsSaving(true);
+      
+      // 1. Request permissions
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'We need access to your photos to save the meme.');
+        return;
+      }
+
+      // 2. Capture the view
+      if (!viewShotRef.current?.capture) return;
+      const captureUri = await viewShotRef.current.capture();
+
+      // 3. Save to media library
+      await MediaLibrary.saveToLibraryAsync(captureUri);
+      
+      setHasSaved(true);
+      setTimeout(() => setHasSaved(false), 3000);
+      Alert.alert('Success!', 'Meme saved to your gallery! 🖼️');
+    } catch (error) {
+      console.error('Saving failed:', error);
+      Alert.alert('Save Failed', 'Could not save the image to your gallery.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -57,17 +115,24 @@ export default function ResultScreen() {
       </View>
 
       <View style={styles.content}>
-        <Animated.View entering={ZoomIn.duration(600).springify()} style={styles.memeContainer}>
-          <Image 
-            source={{ uri: uri || 'https://picsum.photos/seed/meme/800/800' }} 
-            style={styles.memeImage}
-          />
+        <ViewShot ref={viewShotRef} options={{ format: 'jpg', quality: 0.9 }}>
+          <Animated.View entering={ZoomIn.duration(600).springify()} style={styles.memeContainer}>
+            <Image 
+              source={{ uri: uri || 'https://picsum.photos/seed/meme/800/800' }} 
+              style={styles.memeImage}
+            />
           
           <View style={styles.textOverlay}>
             {/* Top Text Cluster */}
             <View style={styles.topCluster}>
               {topLines.map((line, i) => (
-                <Text key={`top-${i}`} style={styles.memeText} numberOfLines={1}>
+                <Text 
+                  key={`top-${i}`} 
+                  style={styles.memeText} 
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.5}
+                >
                   {line.toUpperCase()}
                 </Text>
               ))}
@@ -76,7 +141,13 @@ export default function ResultScreen() {
             {/* Bottom Text Cluster */}
             <View style={styles.bottomCluster}>
               {bottomLines.map((line, i) => (
-                <Text key={`bottom-${i}`} style={styles.memeText} numberOfLines={1}>
+                <Text 
+                  key={`bottom-${i}`} 
+                  style={styles.memeText} 
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.5}
+                >
                   {line.toUpperCase()}
                 </Text>
               ))}
@@ -91,10 +162,11 @@ export default function ResultScreen() {
             </View>
           )}
 
-          <View style={styles.watermark}>
-            <Text style={styles.watermarkText}>MemeGen.ai</Text>
-          </View>
-        </Animated.View>
+            <View style={styles.watermark}>
+              <Text style={styles.watermarkText}>MemeGen.ai</Text>
+            </View>
+          </Animated.View>
+        </ViewShot>
       </View>
 
       <Animated.View entering={FadeInUp.delay(400)} style={styles.footer}>
@@ -103,9 +175,11 @@ export default function ResultScreen() {
         </Pressable>
 
         <AnimatedButton 
-          title="SHARE TO WORLD"
-          onPress={handleShare}
-          style={styles.shareButton}
+          title={hasSaved ? "SAVED!" : (isSaving ? "SAVING..." : "SAVE MEME")}
+          onPress={handleSaveToGallery}
+          style={styles.saveButton}
+          disabled={isSaving || hasSaved}
+          leftIcon={hasSaved ? <Check color="#FFF" size={20} /> : <Download color="#FFF" size={20} />}
         />
 
         <Pressable style={styles.shareButtonSmall} onPress={handleShare}>
@@ -120,6 +194,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0A0A0A',
+    ...Platform.select({
+      web: {
+        height: '100dvh',
+      },
+    }),
   },
   header: {
     paddingTop: 20,
@@ -193,7 +272,7 @@ const styles = StyleSheet.create({
   },
   memeText: {
     color: '#FFF',
-    fontSize: 27,
+    fontSize: 32, // Increased from 27 for more impact
     fontWeight: '900',
     textAlign: 'center',
     textShadowColor: '#000',
@@ -243,5 +322,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  saveButton: {
+    flex: 1,
+    height: 60,
   },
 });

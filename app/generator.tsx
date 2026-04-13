@@ -1,28 +1,33 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, Text, View, Pressable, ActivityIndicator, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
-import { ImagePlus, X, Crown, ChevronDown, RotateCcw } from 'lucide-react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
-import { processMemeImage } from '@/src/utils/imageProcessor';
-import { saveMemeToHistory } from '@/src/utils/historyManager';
 import { generateMemeLines } from '@/src/services/aiService';
+import { saveMemeToHistory } from '@/src/utils/historyManager';
+import { processMemeImage } from '@/src/utils/imageProcessor';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import { ChevronDown, Crown, ImagePlus, RotateCcw, X } from 'lucide-react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View, Modal, FlatList } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function GeneratorScreen() {
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const [mediaPermission, requestMediaPermission] = ImagePicker.useMediaLibraryPermissions();
-  
+
   const cameraRef = useRef<CameraView>(null);
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-  const [style] = useState('Funny');
-  const [language] = useState('English');
+  const [style, setStyle] = useState('Funny');
+  const [language, setLanguage] = useState('English');
+  const [showStyleModal, setShowStyleModal] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+
+  const STYLES = ['Funny', 'Dark', 'Roast', 'Cute'];
+  const LANGUAGES = ['English', 'Hindi', 'Hinglish', 'Tamil', 'Telugu'];
 
   useEffect(() => {
     if (permission && !permission.granted) requestPermission();
@@ -34,7 +39,7 @@ export default function GeneratorScreen() {
       Alert.alert('Error', 'Camera not ready');
       return;
     }
-    
+
     try {
       setIsProcessing(true);
       const photo = await cameraRef.current.takePictureAsync({
@@ -45,18 +50,20 @@ export default function GeneratorScreen() {
       if (photo?.uri) {
         const processed = await processMemeImage(photo.uri);
         const saved = await saveMemeToHistory(processed.uri);
-        
+
         // --- AI GENERATION STEP ---
         setIsGeneratingAI(true);
-        const memeLines = await generateMemeLines(saved.url);
+        const memeLines = await generateMemeLines(saved.url, style, language);
         setIsGeneratingAI(false);
-        
+
         router.push({
           pathname: '/result',
-          params: { 
+          params: {
             uri: saved.url,
             top: JSON.stringify(memeLines.top),
-            bottom: JSON.stringify(memeLines.bottom)
+            bottom: JSON.stringify(memeLines.bottom),
+            style,
+            language
           }
         });
       } else {
@@ -87,15 +94,17 @@ export default function GeneratorScreen() {
 
         // --- AI GENERATION STEP ---
         setIsGeneratingAI(true);
-        const memeLines = await generateMemeLines(saved.url);
+        const memeLines = await generateMemeLines(saved.url, style, language);
         setIsGeneratingAI(false);
-        
+
         router.push({
           pathname: '/result',
-          params: { 
+          params: {
             uri: saved.url,
             top: JSON.stringify(memeLines.top),
-            bottom: JSON.stringify(memeLines.bottom)
+            bottom: JSON.stringify(memeLines.bottom),
+            style,
+            language
           }
         });
       }
@@ -132,14 +141,14 @@ export default function GeneratorScreen() {
             <X color="#FFF" size={28} />
           </Pressable>
           <View style={styles.dropdowns}>
-            <View style={styles.dropdown}>
+            <Pressable onPress={() => setShowStyleModal(true)} style={styles.dropdown}>
               <Text style={styles.dropdownText}>{style}</Text>
               <ChevronDown color={Colors.dark.accent} size={16} />
-            </View>
-            <View style={styles.dropdown}>
+            </Pressable>
+            <Pressable onPress={() => setShowLanguageModal(true)} style={styles.dropdown}>
               <Text style={styles.dropdownText}>{language}</Text>
               <ChevronDown color={Colors.dark.accent} size={16} />
-            </View>
+            </Pressable>
           </View>
           <Pressable onPress={() => router.push('/subscription')} style={styles.navButton}>
             <Crown color={Colors.dark.accent} size={28} fill={Colors.dark.accent} />
@@ -149,7 +158,7 @@ export default function GeneratorScreen() {
 
       <View style={styles.content}>
         <View style={styles.cameraContainer}>
-          <CameraView 
+          <CameraView
             ref={cameraRef}
             style={styles.camera}
             facing={facing}
@@ -170,10 +179,10 @@ export default function GeneratorScreen() {
         <Pressable style={styles.iconButton} onPress={pickImage}>
           <ImagePlus color="#FFF" size={32} />
         </Pressable>
-        
-        <Pressable 
-          style={styles.captureButtonContainer} 
-          onPress={handleCapture} 
+
+        <Pressable
+          style={styles.captureButtonContainer}
+          onPress={handleCapture}
           disabled={isProcessing}
         >
           <View style={styles.captureButtonOuter}>
@@ -181,14 +190,68 @@ export default function GeneratorScreen() {
           </View>
         </Pressable>
 
-        <Pressable 
-          style={styles.iconButton} 
+        <Pressable
+          style={styles.iconButton}
           onPress={() => setFacing(f => f === 'back' ? 'front' : 'back')}
         >
           <RotateCcw color="#FFF" size={32} />
         </Pressable>
       </View>
+
+      {/* Selection Modals */}
+      <SelectionModal 
+        visible={showStyleModal} 
+        onClose={() => setShowStyleModal(false)}
+        options={STYLES}
+        selected={style}
+        onSelect={setStyle}
+        title="SELECT STYLE"
+      />
+
+      <SelectionModal 
+        visible={showLanguageModal} 
+        onClose={() => setShowLanguageModal(false)}
+        options={LANGUAGES}
+        selected={language}
+        onSelect={setLanguage}
+        title="SELECT LANGUAGE"
+      />
     </SafeAreaView>
+  );
+}
+
+function SelectionModal({ visible, onClose, options, selected, onSelect, title }: any) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={styles.modalOverlay} onPress={onClose}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{title}</Text>
+            <Pressable onPress={onClose}>
+              <X color="#FFF" size={24} />
+            </Pressable>
+          </View>
+          <FlatList 
+            data={options}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => (
+              <Pressable 
+                style={[styles.optionItem, selected === item && styles.optionItemSelected]}
+                onPress={() => {
+                  onSelect(item);
+                  onClose();
+                }}
+              >
+                <Text style={[styles.optionText, selected === item && styles.optionTextSelected]}>
+                  {item.toUpperCase()}
+                </Text>
+                {selected === item && <View style={styles.selectedDot} />}
+              </Pressable>
+            )}
+          />
+        </View>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -196,6 +259,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0A0A0A',
+    ...Platform.select({
+      web: {
+        height: '100dvh',
+      },
+    }),
   },
   center: {
     justifyContent: 'center',
@@ -303,5 +371,58 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     backgroundColor: '#FFF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#1A1A1B',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 32,
+    paddingBottom: Platform.OS === 'ios' ? 48 : 32,
+    maxHeight: '60%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    marginBottom: 20,
+  },
+  modalTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  optionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    marginHorizontal: 16,
+    borderRadius: 12,
+  },
+  optionItemSelected: {
+    backgroundColor: 'rgba(0, 255, 102, 0.1)',
+  },
+  optionText: {
+    color: '#A1A1AA',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  optionTextSelected: {
+    color: Colors.dark.accent,
+  },
+  selectedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.dark.accent,
   },
 });
