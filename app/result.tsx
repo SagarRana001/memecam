@@ -31,6 +31,7 @@ export default function ResultScreen() {
   const [isReloading, setIsReloading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
 
   // Re-generate AI text for the same image
   const handleReload = async () => {
@@ -74,6 +75,11 @@ export default function ResultScreen() {
   };
 
   const handleSaveToGallery = async () => {
+    if (!isImageLoaded) {
+      Alert.alert('Hold on', 'Wait for the fire to load fully! 🔥');
+      return;
+    }
+
     try {
       setIsSaving(true);
       
@@ -84,11 +90,14 @@ export default function ResultScreen() {
         return;
       }
 
-      // 2. Capture the view
+      // 2. Small delay to ensure any animations have settled
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // 3. Capture the view
       if (!viewShotRef.current?.capture) return;
       const captureUri = await viewShotRef.current.capture();
 
-      // 3. Save to media library
+      // 4. Save to media library
       await MediaLibrary.saveToLibraryAsync(captureUri);
       
       setHasSaved(true);
@@ -115,14 +124,22 @@ export default function ResultScreen() {
       </View>
 
       <View style={styles.content}>
-        <ViewShot ref={viewShotRef} options={{ format: 'jpg', quality: 0.9 }}>
-          <Animated.View entering={ZoomIn.duration(600).springify()} style={styles.memeContainer}>
+        <ViewShot 
+          ref={viewShotRef} 
+          options={{ format: 'jpg', quality: 1.0, result: 'tmpfile' }}
+        >
+          <Animated.View 
+            entering={ZoomIn.duration(600).springify()} 
+            style={styles.memeContainer}
+            collapsable={false}
+          >
             <Image 
               source={{ uri: uri || 'https://picsum.photos/seed/meme/800/800' }} 
               style={styles.memeImage}
+              onLoad={() => setIsImageLoaded(true)}
             />
           
-          <View style={styles.textOverlay}>
+          <View style={styles.textOverlay} collapsable={false}>
             {/* Top Text Cluster */}
             <View style={styles.topCluster}>
               {topLines.map((line, i) => (

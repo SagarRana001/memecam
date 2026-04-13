@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storage from '../utils/storage';
 
 const MEME_LIMIT = 3;
 const STORAGE_KEY = '@meme_usage_data';
@@ -21,7 +21,7 @@ export const useMemeLimit = () => {
   const loadUsageData = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const storedData = await AsyncStorage.getItem(STORAGE_KEY);
+      const storedData = await storage.getItem(STORAGE_KEY);
       
       if (storedData) {
         const data: UsageData = JSON.parse(storedData);
@@ -30,12 +30,12 @@ export const useMemeLimit = () => {
           setIsOverLimit(data.count >= MEME_LIMIT);
         } else {
           // Reset for a new day
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ count: 0, lastDate: today }));
+      await storage.setItem(STORAGE_KEY, JSON.stringify({ count: 0, lastDate: today }));
           setRemaining(MEME_LIMIT);
           setIsOverLimit(false);
         }
       } else {
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ count: 0, lastDate: today }));
+        await storage.setItem(STORAGE_KEY, JSON.stringify({ count: 0, lastDate: today }));
       }
     } catch (e) {
       console.error('Failed to load usage data', e);
@@ -47,7 +47,7 @@ export const useMemeLimit = () => {
   const incrementUsage = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const storedData = await AsyncStorage.getItem(STORAGE_KEY);
+      const storedData = await storage.getItem(STORAGE_KEY);
       let newCount = 1;
 
       if (storedData) {
@@ -55,7 +55,7 @@ export const useMemeLimit = () => {
         newCount = data.lastDate === today ? data.count + 1 : 1;
       }
 
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ count: newCount, lastDate: today }));
+      await storage.setItem(STORAGE_KEY, JSON.stringify({ count: newCount, lastDate: today }));
       setRemaining(Math.max(0, MEME_LIMIT - newCount));
       setIsOverLimit(newCount >= MEME_LIMIT);
       

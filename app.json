@@ -46,7 +46,8 @@
           "photosPermission": "Allow MemeCam to save memes to your photos.",
           "savePhotosPermission": "Allow MemeCam to save memes to your photos."
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true,

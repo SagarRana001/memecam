@@ -48,13 +48,17 @@ export default function GeneratorScreen() {
       });
 
       if (photo?.uri) {
+        setIsProcessing(true);
         const processed = await processMemeImage(photo.uri);
-        const saved = await saveMemeToHistory(processed.uri);
 
         // --- AI GENERATION STEP ---
         setIsGeneratingAI(true);
-        const memeLines = await generateMemeLines(saved.url, style, language);
+        const memeLines = await generateMemeLines(processed.uri, style, language);
         setIsGeneratingAI(false);
+
+        // --- PERSISTENT SAVE STEP (with metadata for dashboard) ---
+        const fullCaption = [...memeLines.top, ...memeLines.bottom].join(' ');
+        const saved = await saveMemeToHistory(processed.uri, fullCaption, style, language);
 
         router.push({
           pathname: '/result',
@@ -89,13 +93,15 @@ export default function GeneratorScreen() {
       if (!result.canceled && result.assets?.[0]?.uri) {
         setIsProcessing(true);
         const processed = await processMemeImage(result.assets[0].uri);
-        const saved = await saveMemeToHistory(processed.uri);
-        setIsProcessing(false);
 
         // --- AI GENERATION STEP ---
         setIsGeneratingAI(true);
-        const memeLines = await generateMemeLines(saved.url, style, language);
+        const memeLines = await generateMemeLines(processed.uri, style, language);
         setIsGeneratingAI(false);
+
+        // --- PERSISTENT SAVE STEP (with metadata for dashboard) ---
+        const fullCaption = [...memeLines.top, ...memeLines.bottom].join(' ');
+        const saved = await saveMemeToHistory(processed.uri, fullCaption, style, language);
 
         router.push({
           pathname: '/result',

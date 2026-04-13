@@ -6,20 +6,30 @@ import { X, Crown, Check, LogOut, Trash2, Menu } from 'lucide-react-native';
 import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
 
+import { useAuth } from '@/src/context/AuthContext';
+
 export default function SubscriptionScreen() {
   const router = useRouter();
+  const { signOut } = useAuth();
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: () => router.replace('/') },
+      { text: 'Logout', style: 'destructive', onPress: async () => {
+        await signOut();
+        router.replace('/');
+      }},
     ]);
   };
 
   const handleDelete = () => {
     Alert.alert('Delete Account', 'This is permanent. Are you absolutely sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => router.replace('/') },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        // In a real app, delete user data then sign out
+        await signOut();
+        router.replace('/');
+      }},
     ]);
   };
 

@@ -1,5 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import storage from './storage';
 
 const MEME_DIRECTORY = `${FileSystem.documentDirectory}memes/`;
 const HISTORY_KEY = '@meme_history';
@@ -9,6 +9,8 @@ export interface MemeItem {
   url: string;
   caption: string;
   createdAt: number;
+  style?: string;
+  language?: string;
 }
 
 /**
@@ -24,7 +26,12 @@ const ensureDirExists = async () => {
 /**
  * Saves a meme URI to persistent storage and updates the history list
  */
-export const saveMemeToHistory = async (tempUri: string): Promise<MemeItem> => {
+export const saveMemeToHistory = async (
+  tempUri: string, 
+  caption?: string, 
+  style?: string, 
+  language?: string
+): Promise<MemeItem> => {
   try {
     await ensureDirExists();
     
@@ -43,14 +50,16 @@ export const saveMemeToHistory = async (tempUri: string): Promise<MemeItem> => {
     const newMeme: MemeItem = {
       id: timestamp.toString(),
       url: persistentUri,
-      caption: `FIRE MEME ${new Date().toLocaleDateString()}`,
+      caption: caption || `FIRE MEME ${new Date().toLocaleDateString()}`,
       createdAt: timestamp,
+      style: style,
+      language: language,
     };
     
-    // 4. Update AsyncStorage list
+    // 4. Update storage list
     const existingHistory = await getMemeHistory();
     const newHistory = [newMeme, ...existingHistory];
-    await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
+    await storage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
     
     return newMeme;
   } catch (error) {
@@ -64,7 +73,7 @@ export const saveMemeToHistory = async (tempUri: string): Promise<MemeItem> => {
  */
 export const getMemeHistory = async (): Promise<MemeItem[]> => {
   try {
-    const data = await AsyncStorage.getItem(HISTORY_KEY);
+    const data = await storage.getItem(HISTORY_KEY);
     return data ? JSON.parse(data) : [];
   } catch (error) {
     console.error('Failed to retrieve history:', error);
@@ -89,7 +98,7 @@ export const deleteMemeFromHistory = async (id: string) => {
       
       // Remove from history list
       const newHistory = history.filter(m => m.id !== id);
-      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
+      await storage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
     }
   } catch (error) {
     console.error('Failed to delete meme:', error);

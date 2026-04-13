@@ -10,13 +10,14 @@ import Animated, {
 import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
 
+import { signInWithGoogle } from '@/src/utils/auth';
+
 export default function LandingScreen() {
   const router = useRouter();
 
-  const handleLogin = () => {
-    // In a real app, this would trigger Google Auth via expo-auth-session
-    // For now, we simulate success and go to the dashboard
-    router.push('/dashboard');
+  const handleLogin = async () => {
+    await signInWithGoogle();
+    router.replace('/dashboard');
   };
 
   return (
