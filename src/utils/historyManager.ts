@@ -110,3 +110,19 @@ export const deleteMemeFromHistory = async (id: string) => {
     console.error('Failed to delete meme:', error);
   }
 };
+/**
+ * Updates an existing meme record in history (e.g., after a reload)
+ */
+export const updateMemeInHistory = async (id: string, updates: Partial<MemeItem>) => {
+  try {
+    const history = await getMemeHistory();
+    const index = history.findIndex(m => m.id === id);
+    
+    if (index !== -1) {
+      history[index] = { ...history[index], ...updates };
+      await storage.setItem(HISTORY_KEY, JSON.stringify(history));
+    }
+  } catch (error) {
+    console.error('Failed to update meme history:', error);
+  }
+};

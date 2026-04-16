@@ -95,6 +95,7 @@ export default function DashboardScreen() {
         onPress={() => router.push({ 
           pathname: '/result', 
           params: { 
+            id: item.id,
             uri: item.url,
             top: item.topLines ? JSON.stringify(item.topLines) : undefined,
             bottom: item.bottomLines ? JSON.stringify(item.bottomLines) : undefined,

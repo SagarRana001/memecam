@@ -6,7 +6,7 @@ const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
 // Initialize the Google Generative AI SDK
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-const AVAILABLE_MODELS = ["gemini-2.5-flash", "gemini-1.5-flash"];
+const AVAILABLE_MODELS = ["gemini-2.5-flash"];
 
 export interface MemeLines {
   top: string[];
@@ -114,21 +114,21 @@ export const generateMemeLines = async (
           console.error('JSON Parse Error:', e);
         }
       }
-      
+
       throw new Error('Could not parse AI response as valid JSON');
     } catch (error: any) {
       const isLastModel = i === AVAILABLE_MODELS.length - 1;
       const is503 = error.message?.includes('503') || error.status === 503;
 
       if (is503 && !isLastModel) {
-        console.warn(`Model ${modelName} is overloaded (503). Attempting fallback to ${AVAILABLE_MODELS[i+1]}...`);
+        console.warn(`Model ${modelName} is overloaded (503). Attempting fallback to ${AVAILABLE_MODELS[i + 1]}...`);
         // Small delay before retry
         await new Promise(resolve => setTimeout(resolve, 1000));
         continue;
       }
 
       console.error(`AI Generation Error with model ${modelName}:`, error);
-      
+
       // If we've exhausted models or it's a non-503 error, return fallback text
       if (isLastModel) {
         return {

@@ -11,20 +11,32 @@ import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ViewShot from 'react-native-view-shot';
 
+import { SelectionModal } from '@/src/components/SelectionModal';
+import { updateMemeInHistory } from '@/src/utils/historyManager';
 import { useBilling } from '@/src/context/BillingContext';
+import { ChevronDown } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
+
+const STYLES = ['Funny', 'Dark', 'Roast', 'Cute'];
+const LANGUAGES = ['English', 'Hindi', 'Hinglish', 'Tamil', 'Telugu'];
 
 export default function ResultScreen() {
   const router = useRouter();
   const { isPremium } = useBilling();
-  const { uri, top, bottom, style, language } = useLocalSearchParams<{
+  const { id, uri, top, bottom, style, language } = useLocalSearchParams<{
+    id: string,
     uri: string,
     top: string,
     bottom: string,
     style: string,
     language: string
   }>();
+
+  const [currentStyle, setCurrentStyle] = useState(style || 'Funny');
+  const [currentLanguage, setCurrentLanguage] = useState(language || 'English');
+  const [showStyleModal, setShowStyleModal] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
 
   const viewShotRef = useRef<ViewShot>(null);
 
@@ -41,9 +53,20 @@ export default function ResultScreen() {
     if (!uri) return;
     try {
       setIsReloading(true);
-      const newLines = await generateMemeLines(uri, style || 'Funny', language || 'English');
+      const newLines = await generateMemeLines(uri, currentStyle, currentLanguage);
       setTopLines(newLines.top);
       setBottomLines(newLines.bottom);
+
+      // Update history if this is a saved meme
+      if (id) {
+        await updateMemeInHistory(id, {
+          topLines: newLines.top,
+          bottomLines: newLines.bottom,
+          style: currentStyle,
+          language: currentLanguage,
+          caption: [...newLines.top, ...newLines.bottom].join(' ')
+        });
+      }
     } catch (error) {
       console.error('Reload failed:', error);
     } finally {
@@ -120,7 +143,18 @@ export default function ResultScreen() {
         <Pressable onPress={() => router.replace('/dashboard')}>
           <Home color="#FFF" size={28} />
         </Pressable>
-        <Text style={styles.headerTitle}>YOUR FIRE MEME</Text>
+        
+        <View style={styles.dropdowns}>
+          <Pressable onPress={() => setShowStyleModal(true)} style={styles.dropdown}>
+            <Text style={styles.dropdownText}>{currentStyle}</Text>
+            <ChevronDown color={Colors.dark.accent} size={14} />
+          </Pressable>
+          <Pressable onPress={() => setShowLanguageModal(true)} style={styles.dropdown}>
+            <Text style={styles.dropdownText}>{currentLanguage}</Text>
+            <ChevronDown color={Colors.dark.accent} size={14} />
+          </Pressable>
+        </View>
+
         <Pressable onPress={handleReload} disabled={isReloading} style={styles.reloadButton}>
           <RotateCcw color={isReloading ? Colors.dark.muted : Colors.dark.accent} size={28} />
         </Pressable>
@@ -207,7 +241,26 @@ export default function ResultScreen() {
         <Pressable style={styles.shareButtonSmall} onPress={handleShare}>
           <Share2 color="#FFF" size={32} />
         </Pressable>
+
       </Animated.View>
+
+      <SelectionModal 
+        visible={showStyleModal} 
+        onClose={() => setShowStyleModal(false)}
+        options={STYLES}
+        selected={currentStyle}
+        onSelect={setCurrentStyle}
+        title="SELECT STYLE"
+      />
+
+      <SelectionModal 
+        visible={showLanguageModal} 
+        onClose={() => setShowLanguageModal(false)}
+        options={LANGUAGES}
+        selected={currentLanguage}
+        onSelect={setCurrentLanguage}
+        title="SELECT LANGUAGE"
+      />
     </SafeAreaView>
   );
 }
@@ -238,6 +291,26 @@ const styles = StyleSheet.create({
   },
   reloadButton: {
     padding: 4,
+  },
+  dropdowns: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  dropdownText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   content: {
     flex: 1,
