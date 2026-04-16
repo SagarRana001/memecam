@@ -92,7 +92,16 @@ export default function DashboardScreen() {
     >
       <Pressable
         style={styles.memeCard}
-        onPress={() => router.push({ pathname: '/result', params: { uri: item.url } })}
+        onPress={() => router.push({ 
+          pathname: '/result', 
+          params: { 
+            uri: item.url,
+            top: item.topLines ? JSON.stringify(item.topLines) : undefined,
+            bottom: item.bottomLines ? JSON.stringify(item.bottomLines) : undefined,
+            style: item.style,
+            language: item.language
+          } 
+        })}
       >
         <Image source={{ uri: item.url }} style={styles.memeImage} />
         <View style={styles.cardOverlay}>

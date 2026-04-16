@@ -1,26 +1,29 @@
-import React, { useState, useCallback, useRef } from 'react';
-import { StyleSheet, Text, View, Image, Pressable, Share, Dimensions, ActivityIndicator, Alert, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
-import { X, Share2, Home, RotateCcw, Download, Check } from 'lucide-react-native';
-import ViewShot from 'react-native-view-shot';
-import * as Sharing from 'expo-sharing';
-import * as MediaLibrary from 'expo-media-library';
 import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
 import { generateMemeLines } from '@/src/services/aiService';
+import * as MediaLibrary from 'expo-media-library';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as Sharing from 'expo-sharing';
+import { Check, Download, Home, RotateCcw, Share2, X } from 'lucide-react-native';
+import { useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Dimensions, Image, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import ViewShot from 'react-native-view-shot';
+
+import { useBilling } from '@/src/context/BillingContext';
 
 const { width } = Dimensions.get('window');
 
 export default function ResultScreen() {
   const router = useRouter();
-  const { uri, top, bottom, style, language } = useLocalSearchParams<{ 
-    uri: string, 
-    top: string, 
+  const { isPremium } = useBilling();
+  const { uri, top, bottom, style, language } = useLocalSearchParams<{
+    uri: string,
+    top: string,
     bottom: string,
     style: string,
-    language: string 
+    language: string
   }>();
 
   const viewShotRef = useRef<ViewShot>(null);
@@ -51,9 +54,9 @@ export default function ResultScreen() {
   const handleShare = async () => {
     try {
       if (!viewShotRef.current?.capture) return;
-      
+
       const captureUri = await viewShotRef.current.capture();
-      
+
       const isAvailable = await Sharing.isAvailableAsync();
       if (isAvailable) {
         await Sharing.shareAsync(captureUri, {
@@ -82,7 +85,7 @@ export default function ResultScreen() {
 
     try {
       setIsSaving(true);
-      
+
       // 1. Request permissions
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
@@ -99,7 +102,7 @@ export default function ResultScreen() {
 
       // 4. Save to media library
       await MediaLibrary.saveToLibraryAsync(captureUri);
-      
+
       setHasSaved(true);
       setTimeout(() => setHasSaved(false), 3000);
       Alert.alert('Success!', 'Meme saved to your gallery! 🖼️');
@@ -124,64 +127,66 @@ export default function ResultScreen() {
       </View>
 
       <View style={styles.content}>
-        <ViewShot 
-          ref={viewShotRef} 
+        <ViewShot
+          ref={viewShotRef}
           options={{ format: 'jpg', quality: 1.0, result: 'tmpfile' }}
         >
-          <Animated.View 
-            entering={ZoomIn.duration(600).springify()} 
+          <Animated.View
+            entering={ZoomIn.duration(600).springify()}
             style={styles.memeContainer}
             collapsable={false}
           >
-            <Image 
-              source={{ uri: uri || 'https://picsum.photos/seed/meme/800/800' }} 
+            <Image
+              source={{ uri: uri || 'https://picsum.photos/seed/meme/800/800' }}
               style={styles.memeImage}
               onLoad={() => setIsImageLoaded(true)}
             />
-          
-          <View style={styles.textOverlay} collapsable={false}>
-            {/* Top Text Cluster */}
-            <View style={styles.topCluster}>
-              {topLines.map((line, i) => (
-                <Text 
-                  key={`top-${i}`} 
-                  style={styles.memeText} 
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.5}
-                >
-                  {line.toUpperCase()}
-                </Text>
-              ))}
+
+            <View style={styles.textOverlay} collapsable={false}>
+              {/* Top Text Cluster */}
+              <View style={styles.topCluster}>
+                {topLines.map((line, i) => (
+                  <Text
+                    key={`top-${i}`}
+                    style={styles.memeText}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.5}
+                  >
+                    {line.toUpperCase()}
+                  </Text>
+                ))}
+              </View>
+
+              {/* Bottom Text Cluster */}
+              <View style={styles.bottomCluster}>
+                {bottomLines.map((line, i) => (
+                  <Text
+                    key={`bottom-${i}`}
+                    style={styles.memeText}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.5}
+                  >
+                    {line.toUpperCase()}
+                  </Text>
+                ))}
+              </View>
             </View>
 
-            {/* Bottom Text Cluster */}
-            <View style={styles.bottomCluster}>
-              {bottomLines.map((line, i) => (
-                <Text 
-                  key={`bottom-${i}`} 
-                  style={styles.memeText} 
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.5}
-                >
-                  {line.toUpperCase()}
-                </Text>
-              ))}
-            </View>
-          </View>
+            {/* Reloading Overlay */}
+            {isReloading && (
+              <View style={styles.loadingOverlay}>
+                <ActivityIndicator color={Colors.dark.accent} size="large" />
+                <Text style={styles.loadingText}>REFRESHING FIRE...</Text>
+              </View>
+            )}
 
-          {/* Reloading Overlay */}
-          {isReloading && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator color={Colors.dark.accent} size="large" />
-              <Text style={styles.loadingText}>REFRESHING FIRE...</Text>
-            </View>
-          )}
-
-            <View style={styles.watermark}>
-              <Text style={styles.watermarkText}>MemeGen.ai</Text>
-            </View>
+            {!isPremium && (
+              <View style={styles.diagonalWatermark} pointerEvents="none">
+                <Text style={styles.diagonalText}>Memecam.in</Text>
+              </View>
+            )}
           </Animated.View>
         </ViewShot>
       </View>
@@ -191,7 +196,7 @@ export default function ResultScreen() {
           <X color="#FFF" size={32} />
         </Pressable>
 
-        <AnimatedButton 
+        <AnimatedButton
           title={hasSaved ? "SAVED!" : (isSaving ? "SAVING..." : "SAVE MEME")}
           onPress={handleSaveToGallery}
           style={styles.saveButton}
@@ -297,20 +302,18 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
     letterSpacing: 0.5,
   },
-  watermark: {
-    position: 'absolute',
-    bottom: 12,
-    right: 12,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+  diagonalWatermark: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
   },
-  watermarkText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 10,
-    fontWeight: '600',
-    letterSpacing: 1,
+  diagonalText: {
+    color: 'rgba(255,255,255,0.2)',
+    fontSize: 42,
+    fontWeight: '900',
+    transform: [{ rotate: '-45deg' }],
+    letterSpacing: 2,
   },
   footer: {
     height: 120,

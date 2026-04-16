@@ -6,11 +6,15 @@ import { X, Crown, Check, LogOut, Trash2, Menu } from 'lucide-react-native';
 import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
 
-import { useAuth } from '@/src/context/AuthContext';
+import { useBilling } from '@/src/context/BillingContext';
 
 export default function SubscriptionScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
+  const { isPremium, products, loading, requestPurchase, restorePurchases } = useBilling();
+
+  const premiumProduct = products.find(p => p.productId === 'memecam_premium_monthly');
+  const priceLabel = premiumProduct ? `SUBSCRIBE FOR ${premiumProduct.localizedPrice}` : 'SUBSCRIBE FOR 799INR/mo';
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -50,7 +54,9 @@ export default function SubscriptionScreen() {
           <View style={styles.heroImagePlaceholder}>
             <Crown color={Colors.dark.accent} size={80} fill={Colors.dark.accent} />
           </View>
-          <Text style={styles.promoTitle}>MAKE ANY MOMENT FIRE</Text>
+          <Text style={styles.promoTitle}>
+            {isPremium ? 'YOU ARE PREMIUM' : 'MAKE ANY MOMENT FIRE'}
+          </Text>
         </Animated.View>
 
         <View style={styles.features}>
@@ -61,12 +67,26 @@ export default function SubscriptionScreen() {
         </View>
 
         <Animated.View entering={FadeInUp.delay(300)} style={styles.actions}>
-          <AnimatedButton 
-            variant="primary"
-            title="SUBSCRIBE FOR 799INR/mo"
-            onPress={() => Alert.alert('Success', 'Premium Activated!')}
-            style={styles.subscribeButton}
-          />
+          {!isPremium ? (
+            <AnimatedButton 
+              variant="primary"
+              title={loading ? "PROCESSING..." : priceLabel}
+              onPress={() => requestPurchase('memecam_premium_monthly')}
+              style={styles.subscribeButton}
+              disabled={loading}
+            />
+          ) : (
+            <View style={styles.premiumBadge}>
+              <Check color="#000" size={20} />
+              <Text style={styles.premiumBadgeText}>ACTIVE SUBSCRIPTION</Text>
+            </View>
+          )}
+
+          <View style={styles.secondaryActions}>
+            <Pressable onPress={restorePurchases}>
+              <Text style={styles.restoreText}>Restore Purchases</Text>
+            </Pressable>
+          </View>
 
           <View style={styles.dangerZone}>
             <Pressable style={styles.iconAction} onPress={handleLogout}>
@@ -165,6 +185,30 @@ const styles = StyleSheet.create({
   subscribeButton: {
     width: '100%',
     height: 64,
+  },
+  secondaryActions: {
+    alignItems: 'center',
+    marginTop: -10,
+  },
+  restoreText: {
+    color: Colors.dark.muted,
+    fontSize: 14,
+    textDecorationLine: 'underline',
+  },
+  premiumBadge: {
+    backgroundColor: Colors.dark.accent,
+    height: 64,
+    borderRadius: 32,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  premiumBadgeText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
   dangerZone: {
     flexDirection: 'row',

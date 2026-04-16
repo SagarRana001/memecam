@@ -7,7 +7,7 @@ export interface ProcessedImage {
 }
 
 /**
- * Processes an image according to the MemeGen AI specifications:
+ * Processes an image according to the Memecam.in specifications:
  * 1. Crops to a square format (1:1 aspect ratio)
  * 2. Compresses/Resizes to 256x256 for optimal AI processing speed
  */

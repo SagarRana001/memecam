@@ -58,7 +58,7 @@ export default function GeneratorScreen() {
 
         // --- PERSISTENT SAVE STEP (with metadata for dashboard) ---
         const fullCaption = [...memeLines.top, ...memeLines.bottom].join(' ');
-        const saved = await saveMemeToHistory(processed.uri, fullCaption, style, language);
+        const saved = await saveMemeToHistory(processed.uri, fullCaption, style, language, memeLines.top, memeLines.bottom);
 
         router.push({
           pathname: '/result',
@@ -101,7 +101,7 @@ export default function GeneratorScreen() {
 
         // --- PERSISTENT SAVE STEP (with metadata for dashboard) ---
         const fullCaption = [...memeLines.top, ...memeLines.bottom].join(' ');
-        const saved = await saveMemeToHistory(processed.uri, fullCaption, style, language);
+        const saved = await saveMemeToHistory(processed.uri, fullCaption, style, language, memeLines.top, memeLines.bottom);
 
         router.push({
           pathname: '/result',

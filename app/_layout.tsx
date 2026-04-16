@@ -8,6 +8,7 @@ import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
+import { BillingProvider } from '@/src/context/BillingContext';
 import { useRouter, useSegments } from 'expo-router';
 
 export {
@@ -39,7 +40,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <AuthProvider>
-          <RootLayoutNav />
+          <BillingProvider>
+            <RootLayoutNav />
+          </BillingProvider>
         </AuthProvider>
       </GestureHandlerRootView>
     </SafeAreaProvider>

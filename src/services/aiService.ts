@@ -1,8 +1,12 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as FileSystem from 'expo-file-system/legacy';
 import { EncodingType } from 'expo-file-system/legacy';
 
-const OPENROUTER_API_KEY = process.env.EXPO_PUBLIC_OPENROUTER_API_KEY || '';
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
+// Initialize the Google Generative AI SDK
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+const AVAILABLE_MODELS = ["gemini-2.5-flash", "gemini-1.5-flash"];
 
 export interface MemeLines {
   top: string[];
@@ -11,129 +15,133 @@ export interface MemeLines {
 
 /**
  * Generates 4 lines of meme text (2 top, 2 bottom) for a given image URI.
- * Uses OpenRouter for AI processing.
+ * Uses Google Gemini SDK for AI processing with fallback support for 503 errors.
  */
 export const generateMemeLines = async (
-  imageUri: string, 
-  style: string = 'Funny', 
+  imageUri: string,
+  style: string = 'Funny',
   language: string = 'English'
 ): Promise<MemeLines> => {
-  if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY === 'sk-or-v1-your-key-here') {
+  if (!GEMINI_API_KEY || GEMINI_API_KEY === 'your-gemini-api-key-here') {
     // Fallback if API key is not configured
     return {
-      top: ['GIVE ME', 'API KEY'],
+      top: ['GIVE ME', 'GEMINI KEY'],
       bottom: ['SO I CAN', 'MAKE MEMES'],
     };
   }
 
+  // 1. Read image as base64 (once, outside the loop)
+  let base64Data = '';
   try {
-    console.log('--- AI Brainstorming Start (OpenRouter) ---');
-    console.log('Processing image URI:', imageUri);
-
-    // 1. Read image as base64
-    const base64Data = await FileSystem.readAsStringAsync(imageUri, {
+    base64Data = await FileSystem.readAsStringAsync(imageUri, {
       encoding: EncodingType.Base64,
     });
     console.log('Base64 Conversion: SUCCESS (Length:', base64Data.length, ')');
+  } catch (err) {
+    console.error('Failed to read image for AI processing:', err);
+    throw err;
+  }
 
-    // 2. Prepare the prompt and payload
-    const styleDescription = style === 'Roast' 
-      ? 'Savage, insulting (in a funny way), and high-energy roast.' 
-      : style === 'Dark' 
+  // 2. Prepare the prompt
+  const styleDescription = style === 'Roast'
+    ? 'Savage, insulting (in a funny way), and high-energy roast.'
+    : style === 'Dark'
       ? 'Edgy, cynical, and dark humor.'
       : style === 'Cute'
-      ? 'Wholesome, sweet, and adorable.'
-      : 'Humorous, witty, and lighthearted.';
+        ? 'Wholesome, sweet, and adorable.'
+        : 'Humorous, witty, and lighthearted.';
 
-    const languageInstruction = language === 'Hinglish'
-      ? 'Write the captions specifically in Hinglish (Hindi written in Roman/English script).'
-      : language === 'English'
+  const languageInstruction = language === 'Hinglish'
+    ? 'Write the captions specifically in Hinglish (Hindi written in Roman/English script).'
+    : language === 'English'
       ? 'Write the captions in English.'
       : `Write the captions in ${language} (using its native script).`;
 
-    const prompt = `
-      Analyze this image and generate a ${style.toUpperCase()} meme caption for it.
-      Vibe/Style: ${styleDescription}
-      Language: ${languageInstruction}
+  const prompt = `
+    Analyze this image and generate a ${style.toUpperCase()} meme caption for it.
+    Vibe/Style: ${styleDescription}
+    Language: ${languageInstruction}
 
-      You MUST provide exactly 4 short, punchy lines:
-      - Two distinct lines for the TOP of the meme.
-      - Two distinct lines for the BOTTOM of the meme.
-      
-      Return ONLY a valid JSON object with the following structure:
-      {
-        "top": ["line 1", "line 2"],
-        "bottom": ["line 3", "line 4"]
-      }
-    `;
-
-    const payload = {
-      model: 'google/gemini-2.0-flash-001', // High performance & low cost
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:image/jpeg;base64,${base64Data}`,
-              },
-            },
-          ],
-        },
-      ],
-      response_format: { type: 'json_object' }, // Enforce JSON response if supported
-    };
-
-    // 3. Call OpenRouter
-    const response = await fetch(OPENROUTER_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://github.com/memecam', // Optional, for OpenRouter ranking
-        'X-Title': 'MemeCam', // Optional, for OpenRouter ranking
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('OpenRouter API Error:', errorData);
-      throw new Error(`OpenRouter API responded with status ${response.status}`);
-    }
-
-    const data = await response.json();
-    const responseText = data.choices[0]?.message?.content || '';
+    You MUST provide exactly 4 short, punchy lines:
+    - Two distinct lines for the TOP of the meme.
+    - Two distinct lines for the BOTTOM of the meme.
     
-    console.log('--- RAW AI RESPONSE ---');
-    console.log(responseText);
-    console.log('-----------------------');
+    Return ONLY a valid JSON object with the following structure:
+    {
+      "top": ["line 1", "line 2"],
+      "bottom": ["line 3", "line 4"]
+    }
+  `;
 
-    // 4. Clean and parse JSON from the response
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        console.log('JSON Parsing: SUCCESS');
+  // 3. Call Gemini SDK with model fallback
+  for (let i = 0; i < AVAILABLE_MODELS.length; i++) {
+    const modelName = AVAILABLE_MODELS[i];
+    try {
+      console.log(`--- AI Brainstorming Start (Model: ${modelName}) ---`);
+
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: {
+          responseMimeType: "application/json",
+        }
+      });
+
+      const imagePart = {
+        inlineData: {
+          data: base64Data,
+          mimeType: "image/jpeg",
+        },
+      };
+
+      const result = await model.generateContent([prompt, imagePart]);
+      const responseText = result.response.text();
+
+      console.log('--- RAW AI RESPONSE ---');
+      console.log(responseText);
+      console.log('-----------------------');
+
+      // 4. Clean and parse JSON from the response
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          console.log('JSON Parsing: SUCCESS');
+          return {
+            top: Array.isArray(parsed.top) ? parsed.top : [String(parsed.top || ''), ''],
+            bottom: Array.isArray(parsed.bottom) ? parsed.bottom : [String(parsed.bottom || ''), ''],
+          };
+        } catch (e) {
+          console.error('JSON Parse Error:', e);
+        }
+      }
+      
+      throw new Error('Could not parse AI response as valid JSON');
+    } catch (error: any) {
+      const isLastModel = i === AVAILABLE_MODELS.length - 1;
+      const is503 = error.message?.includes('503') || error.status === 503;
+
+      if (is503 && !isLastModel) {
+        console.warn(`Model ${modelName} is overloaded (503). Attempting fallback to ${AVAILABLE_MODELS[i+1]}...`);
+        // Small delay before retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+
+      console.error(`AI Generation Error with model ${modelName}:`, error);
+      
+      // If we've exhausted models or it's a non-503 error, return fallback text
+      if (isLastModel) {
         return {
-          top: Array.isArray(parsed.top) ? parsed.top : [String(parsed.top || ''), ''],
-          bottom: Array.isArray(parsed.bottom) ? parsed.bottom : [String(parsed.bottom || ''), ''],
+          top: ['AI IS SLEEPY', 'TRY AGAIN'],
+          bottom: ['MAYBE CHECK', 'CONNECTION'],
         };
-      } catch (e) {
-        console.error('JSON Parse Error:', e);
       }
     }
-
-    console.warn('AI response did not contain valid JSON structure.');
-    throw new Error('Could not parse AI response');
-  } catch (error) {
-    console.error('AI Generation Error:', error);
-    // Fallback on error
-    return {
-      top: ['AI IS SLEEPY', 'TRY AGAIN'],
-      bottom: ['MAYBE CHECK', 'CONNECTION'],
-    };
   }
+
+  // Should never reach here due to the catch block handling return/continue
+  return {
+    top: ['AI IS SLEEPY', 'TRY AGAIN'],
+    bottom: ['MAYBE CHECK', 'CONNECTION'],
+  };
 };

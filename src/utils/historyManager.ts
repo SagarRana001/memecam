@@ -8,6 +8,8 @@ export interface MemeItem {
   id: string;
   url: string;
   caption: string;
+  topLines?: string[];
+  bottomLines?: string[];
   createdAt: number;
   style?: string;
   language?: string;
@@ -30,7 +32,9 @@ export const saveMemeToHistory = async (
   tempUri: string, 
   caption?: string, 
   style?: string, 
-  language?: string
+  language?: string,
+  topLines?: string[],
+  bottomLines?: string[]
 ): Promise<MemeItem> => {
   try {
     await ensureDirExists();
@@ -51,6 +55,8 @@ export const saveMemeToHistory = async (
       id: timestamp.toString(),
       url: persistentUri,
       caption: caption || `FIRE MEME ${new Date().toLocaleDateString()}`,
+      topLines,
+      bottomLines,
       createdAt: timestamp,
       style: style,
       language: language,
