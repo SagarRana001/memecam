@@ -26,11 +26,8 @@ export default function RootLayout() {
     if (error) throw error;
   }, [error]);
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
+  // In RootLayout, we don't have access to useAuth yet because it's inside the provider.
+  // We'll move the SplashScreen hiding to RootLayoutNav instead.
 
   if (!loaded && !error) {
     return null;
@@ -55,19 +52,23 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
+    if (!loading) {
+      SplashScreen.hideAsync();
+    }
+  }, [loading]);
+
+  useEffect(() => {
     if (loading) return;
 
-    const inAuthGroup = segments[0] === 'login' || segments[0] === 'index';
+    const inAuthGroup = segments[0] === 'login' || segments[0] === '(auth)' || segments[0] === undefined;
 
-    /* 
     if (!session && !inAuthGroup) {
-      // Redirect to landing/login if not logged in
+      // Redirect to landing if not logged in
       router.replace('/');
-    } else if (session && inAuthGroup) {
-      // Redirect to dashboard if logged in
+    } else if (session && (segments[0] === 'login' || segments[0] === undefined)) {
+      // Redirect to dashboard if logged in and trying to access landing/login
       router.replace('/dashboard');
     }
-    */
   }, [session, loading, segments]);
 
   return (

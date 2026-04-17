@@ -7,9 +7,22 @@ import { LogIn, ArrowRight } from 'lucide-react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { signInWithGoogle } from '@/src/utils/auth';
 
+import { useAuth } from '@/src/context/AuthContext';
+
 export default function LoginScreen() {
   const router = useRouter();
+  const { session, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
+
+  React.useEffect(() => {
+    if (!authLoading && session) {
+      router.replace('/dashboard');
+    }
+  }, [session, authLoading]);
+
+  if (authLoading || session) {
+    return null;
+  }
 
   const handleGoogleLogin = async () => {
     setLoading(true);
