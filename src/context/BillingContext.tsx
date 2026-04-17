@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabase';
+
 import { Platform, Alert } from 'react-native';
 import * as IAP from 'react-native-iap';
 
@@ -25,7 +28,9 @@ const BillingContext = createContext<BillingContextType>({
 });
 
 export const BillingProvider = ({ children }: { children: React.ReactNode }) => {
+  const { user } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
+
   const [products, setProducts] = useState<IAP.Product[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -74,7 +79,18 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
           
           await IAP.finishTransaction({ purchase, isConsumable: false });
           setIsPremium(true);
+          
+          // --- SYNC TO SUPABASE ---
+          if (user?.id) {
+            await supabase
+              .from('profiles')
+              .update({ is_subscriber: true })
+              .eq('id', user.id);
+            console.log('Premium status synced to Supabase! 🚀');
+          }
+
           Alert.alert('Success', 'Premium subscription activated!');
+
         } catch (ackErr) {
           console.warn('IAP: Ack Error', ackErr);
         }
@@ -103,7 +119,18 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
         (p) => itemSkus.includes(p.productId)
       );
       
+      
       setIsPremium(hasPremium);
+
+      // --- SYNC TO SUPABASE ---
+      if (hasPremium && user?.id) {
+        await supabase
+          .from('profiles')
+          .update({ is_subscriber: true })
+          .eq('id', user.id);
+        console.log('Premium status restored to Supabase! 🚀');
+      }
+
     } catch (err) {
       console.warn('IAP: Restore Error', err);
     }

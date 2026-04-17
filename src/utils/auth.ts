@@ -1,24 +1,19 @@
-// import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
-// import { supabase } from '../lib/supabase';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import { supabase } from '../lib/supabase';
 import { Alert } from 'react-native';
 
 // Configure Google Sign-In
-// You MUST provide a webClientId from Google Cloud Console
-/*
+// The webClientId is required for Supabase to verify the ID token.
 GoogleSignin.configure({
-  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || 'YOUR_WEB_CLIENT_ID_HERE',
+  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
 });
-*/
 
 export const signInWithGoogle = async () => {
-  console.log('Google Sign-in is temporarily DISABLED. Redirecting to dashboard...');
-  return { success: true };
-  /*
   try {
     // 1. Check for Play Services (Android only)
     await GoogleSignin.hasPlayServices();
     
-    // 2. Clear pre-existing signs to ensure account picker shows up
+    // 2. Clear pre-existing signs to ensure account picker shows up (optional)
     try {
       await GoogleSignin.signOut();
     } catch (e) {
@@ -53,6 +48,7 @@ export const signInWithGoogle = async () => {
       Alert.alert('Login Error', error.message || 'An error occurred during Google Sign-in');
       console.error('Google Sign-in Error Detail:', error);
     }
+    throw error;
   }
-  */
 };
+

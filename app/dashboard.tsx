@@ -8,6 +8,10 @@ import { useAuth } from '@/src/context/AuthContext';
 import { ActivityIndicator, Dimensions, FlatList, Image, Platform, Pressable, StyleSheet, Text, View, TextInput, Alert, Modal } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getUserMemes, getUserMemeCount, getUserProfile } from '@/src/services/memeService';
+
+import { useBilling } from '@/src/context/BillingContext';
+
 
 const { width } = Dimensions.get('window');
 const COLUMN_WIDTH = (width - 48) / 2;
@@ -24,8 +28,12 @@ export default function DashboardScreen() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [profile, setProfile] = useState<any>(null);
+  const [memeCount, setMemeCount] = useState(0);
+
 
   const { user, signOut } = useAuth();
+  const { isPremium } = useBilling();
+
 
   const STYLES = ['All', 'Funny', 'Dark', 'Roast', 'Cute'];
 
@@ -36,25 +44,57 @@ export default function DashboardScreen() {
   }, [user]);
 
   const fetchProfile = async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user?.id)
-      .single();
-    
-    if (data) setProfile(data);
+    try {
+      if (!user) return;
+      const data = await getUserProfile(user.id);
+      setProfile(data);
+      setMemeCount(data.memes_generated_today || 0);
+    } catch (error) {
+      console.error('Failed to fetch profile:', error);
+    }
   };
+
 
   useFocusEffect(
     useCallback(() => {
       const loadHistory = async () => {
+        if (!user) return;
         setIsLoading(true);
-        const history = await getMemeHistory();
-        setMemes(history);
-        setIsLoading(false);
+        try {
+          // 1. Fetch profile/count for the banner
+          const profileData = await getUserProfile(user.id);
+          setProfile(profileData);
+          setMemeCount(profileData.memes_generated_today || 0);
+
+
+          // 2. Fetch memes from Supabase
+          const dbMemes = await getUserMemes(user.id);
+          
+          // 3. Transform to MemeItem structure (to keep UI code working)
+          const transformed: MemeItem[] = dbMemes.map((m: any) => ({
+            id: m.id,
+            url: m.image_url,
+            caption: m.caption,
+            topLines: m.top_lines,
+            bottomLines: m.bottom_lines,
+            createdAt: new Date(m.created_at).getTime(),
+            style: m.style,
+            language: m.language
+          }));
+
+          setMemes(transformed);
+        } catch (error) {
+          console.error('Failed to load Supabase memes:', error);
+          // Fallback to local if needed, or show error
+          const history = await getMemeHistory();
+          setMemes(history);
+        } finally {
+          setIsLoading(false);
+        }
       };
       loadHistory();
-    }, [])
+    }, [user])
+
   );
 
   const handleLogout = () => {
@@ -143,12 +183,20 @@ export default function DashboardScreen() {
       <View style={styles.banner}>
         <View style={styles.bannerInfo}>
           <Zap color={Colors.dark.accent} size={24} fill={Colors.dark.accent} />
-          <Text style={styles.bannerText}>3 MEMES REMAINING TODAY</Text>
+          <Text style={styles.bannerText}>
+            {(isPremium || profile?.is_subscriber) 
+              ? 'UNLIMITED FIRE ACTIVATED 🔥' 
+              : `${Math.max(0, 3 - memeCount)} MEMES REMAINING`}
+          </Text>
         </View>
-        <Pressable onPress={() => router.push('/subscription')}>
-          <ChevronRight color={Colors.dark.accent} size={20} />
-        </Pressable>
+        {!(isPremium || profile?.is_subscriber) && (
+
+          <Pressable onPress={() => router.push('/subscription')}>
+            <ChevronRight color={Colors.dark.accent} size={20} />
+          </Pressable>
+        )}
       </View>
+
 
       {/* Meme Grid */}
       {isLoading ? (

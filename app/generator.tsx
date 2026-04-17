@@ -12,6 +12,10 @@ import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View }
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SelectionModal } from '@/src/components/SelectionModal';
+import { useAuth } from '@/src/context/AuthContext';
+import { useBilling } from '@/src/context/BillingContext';
+import { getUserMemeCount, uploadMemeImage, saveMemeToDb } from '@/src/services/memeService';
+
 
 export default function GeneratorScreen() {
   const router = useRouter();
@@ -26,6 +30,10 @@ export default function GeneratorScreen() {
   const [language, setLanguage] = useState('English');
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+  
+  const { user } = useAuth();
+  const { isPremium } = useBilling();
+
 
   const STYLES = ['Funny', 'Dark', 'Roast', 'Cute'];
   const LANGUAGES = ['English', 'Hindi', 'Hinglish', 'Tamil', 'Telugu'];
@@ -43,6 +51,25 @@ export default function GeneratorScreen() {
 
     try {
       setIsProcessing(true);
+
+      // --- RATE LIMIT CHECK ---
+      if (user) {
+        const count = await getUserMemeCount(user.id);
+        if (!isPremium && count >= 3) {
+          Alert.alert(
+            'Limit Reached',
+
+            'You have used your 3 free memes. Upgrade to Premium for unlimited fire! 🔥',
+            [
+              { text: 'Later', style: 'cancel' },
+              { text: 'UPGRADE NOW', onPress: () => router.push('/subscription') }
+            ]
+          );
+          setIsProcessing(false);
+          return;
+        }
+      }
+
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
         base64: false,
@@ -57,15 +84,16 @@ export default function GeneratorScreen() {
         const memeLines = await generateMemeLines(processed.uri, style, language);
         setIsGeneratingAI(false);
 
-        // --- PERSISTENT SAVE STEP (with metadata for dashboard) ---
-        const fullCaption = [...memeLines.top, ...memeLines.bottom].join(' ');
-        const saved = await saveMemeToHistory(processed.uri, fullCaption, style, language, memeLines.top, memeLines.bottom);
+        // --- SUPABASE PREPARATIONS ---
+        // We no longer upload here. We pass the local URI to ResultScreen, 
+        // which will capture the final meme (with text) and upload it.
+        let memeId = Date.now().toString();
 
         router.push({
           pathname: '/result',
           params: {
-            id: saved.id,
-            uri: saved.url,
+            id: memeId,
+            uri: processed.uri,
             top: JSON.stringify(memeLines.top),
             bottom: JSON.stringify(memeLines.bottom),
             style,
@@ -75,12 +103,14 @@ export default function GeneratorScreen() {
       } else {
         throw new Error('No photo data');
       }
+
     } catch (error) {
       console.error('Capture error:', error);
       Alert.alert('Capture Failed', 'Please try again or select from gallery.');
     } finally {
       setIsProcessing(false);
     }
+
   };
 
   const pickImage = async () => {
@@ -94,6 +124,25 @@ export default function GeneratorScreen() {
 
       if (!result.canceled && result.assets?.[0]?.uri) {
         setIsProcessing(true);
+
+        // --- RATE LIMIT CHECK ---
+        if (user) {
+          const count = await getUserMemeCount(user.id);
+          if (!isPremium && count >= 3) {
+            Alert.alert(
+              'Limit Reached',
+
+              'You have used your 3 free memes. Upgrade to Premium for unlimited fire! 🔥',
+              [
+                { text: 'Later', style: 'cancel' },
+                { text: 'UPGRADE NOW', onPress: () => router.push('/subscription') }
+              ]
+            );
+            setIsProcessing(false);
+            return;
+          }
+        }
+
         const processed = await processMemeImage(result.assets[0].uri);
 
         // --- AI GENERATION STEP ---
@@ -101,15 +150,14 @@ export default function GeneratorScreen() {
         const memeLines = await generateMemeLines(processed.uri, style, language);
         setIsGeneratingAI(false);
 
-        // --- PERSISTENT SAVE STEP (with metadata for dashboard) ---
-        const fullCaption = [...memeLines.top, ...memeLines.bottom].join(' ');
-        const saved = await saveMemeToHistory(processed.uri, fullCaption, style, language, memeLines.top, memeLines.bottom);
+        // --- SUPABASE PREPARATIONS ---
+        let memeId = Date.now().toString();
 
         router.push({
           pathname: '/result',
           params: {
-            id: saved.id,
-            uri: saved.url,
+            id: memeId,
+            uri: processed.uri,
             top: JSON.stringify(memeLines.top),
             bottom: JSON.stringify(memeLines.bottom),
             style,
@@ -117,12 +165,14 @@ export default function GeneratorScreen() {
           }
         });
       }
+
     } catch (error) {
       console.error('Picker error:', error);
       Alert.alert('Error', 'Failed to pick image from gallery.');
     } finally {
       setIsProcessing(false);
     }
+
   };
 
   if (!permission) {

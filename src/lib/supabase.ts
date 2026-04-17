@@ -3,8 +3,13 @@ import { createClient } from '@supabase/supabase-js';
 import storage from '../utils/storage';
 
 // Replace these with your actual Supabase URL and Key
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'your-anon-key';
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('Supabase URL or Anon Key is missing. Check your .env file.');
+}
+
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

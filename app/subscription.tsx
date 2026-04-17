@@ -1,11 +1,12 @@
-import { StyleSheet, Text, View, Pressable, ScrollView, Alert, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
-import { X, Crown, Check, LogOut, Trash2, Menu } from 'lucide-react-native';
 import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
+import { useRouter } from 'expo-router';
+import { Check, Crown, LogOut, Menu, Trash2, X } from 'lucide-react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useAuth } from '@/src/context/AuthContext';
 import { useBilling } from '@/src/context/BillingContext';
 
 export default function SubscriptionScreen() {
@@ -19,21 +20,25 @@ export default function SubscriptionScreen() {
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: async () => {
-        await signOut();
-        router.replace('/');
-      }},
+      {
+        text: 'Logout', style: 'destructive', onPress: async () => {
+          await signOut();
+          router.replace('/');
+        }
+      },
     ]);
   };
 
   const handleDelete = () => {
     Alert.alert('Delete Account', 'This is permanent. Are you absolutely sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        // In a real app, delete user data then sign out
-        await signOut();
-        router.replace('/');
-      }},
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          // In a real app, delete user data then sign out
+          await signOut();
+          router.replace('/');
+        }
+      },
     ]);
   };
 
@@ -68,7 +73,7 @@ export default function SubscriptionScreen() {
 
         <Animated.View entering={FadeInUp.delay(300)} style={styles.actions}>
           {!isPremium ? (
-            <AnimatedButton 
+            <AnimatedButton
               variant="primary"
               title={loading ? "PROCESSING..." : priceLabel}
               onPress={() => requestPurchase('memecam_premium_monthly')}

@@ -14,7 +14,13 @@ import ViewShot from 'react-native-view-shot';
 import { SelectionModal } from '@/src/components/SelectionModal';
 import { updateMemeInHistory } from '@/src/utils/historyManager';
 import { useBilling } from '@/src/context/BillingContext';
+import { useAuth } from '@/src/context/AuthContext';
+import { getUserMemeCount, saveMemeToDb, uploadMemeImage, incrementMemeCount } from '@/src/services/memeService';
+
 import { ChevronDown } from 'lucide-react-native';
+import { useEffect } from 'react';
+
+
 
 const { width } = Dimensions.get('window');
 
@@ -23,7 +29,9 @@ const LANGUAGES = ['English', 'Hindi', 'Hinglish', 'Tamil', 'Telugu'];
 
 export default function ResultScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { isPremium } = useBilling();
+
   const { id, uri, top, bottom, style, language } = useLocalSearchParams<{
     id: string,
     uri: string,
@@ -47,31 +55,109 @@ export default function ResultScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [isUploadingToCloud, setIsUploadingToCloud] = useState(false);
+
+  // Automatic Cloud Upload when meme is ready
+  useEffect(() => {
+    if (isImageLoaded && !isReloading && user && !isUploadingToCloud) {
+      autoUploadMeme();
+    }
+  }, [isImageLoaded, isReloading, topLines, bottomLines]);
+
+  const autoUploadMeme = async () => {
+    if (!viewShotRef.current?.capture || isUploadingToCloud) return;
+
+    try {
+      setIsUploadingToCloud(true);
+      
+      // 1. Small delay to ensure the view is fully rendered with text
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // 2. Capture the final rendered meme (image + text)
+      const captureUri = await viewShotRef.current.capture();
+      
+      // 3. Upload to Supabase Storage
+      const publicUrl = await uploadMemeImage(captureUri, user!.id);
+      
+      // 4. Save to DB record
+      const fullCaption = [...topLines, ...bottomLines].join(' ');
+      await saveMemeToDb({
+        user_id: user!.id,
+        image_url: publicUrl,
+        caption: fullCaption,
+        metadata: {
+          style: currentStyle,
+          language: currentLanguage,
+          topLines: topLines,
+          bottomLines: bottomLines
+        }
+      });
+      
+      // 4. Increment the daily count in Supabase profile
+      await incrementMemeCount(user!.id);
+      
+      console.log('Meme synced and count incremented! 🚀');
+
+    } catch (error: any) {
+      console.error('Cloud sync failed:', error);
+      // For development, show the error so the user can debug bucket/permission issues
+      Alert.alert('Cloud Sync Error', error.message || 'Failed to backup your fire. 🔥');
+    } finally {
+      setIsUploadingToCloud(false);
+    }
+  };
+
 
   // Re-generate AI text for the same image
   const handleReload = async () => {
+
     if (!uri) return;
     try {
       setIsReloading(true);
+
+      // --- RATE LIMIT CHECK ---
+      if (user) {
+        const count = await getUserMemeCount(user.id);
+        if (!isPremium && count >= 3) {
+          Alert.alert(
+            'Limit Reached',
+
+            'You have used your 3 free memes. Upgrade to Premium for more fire! 🔥',
+            [
+              { text: 'Later', style: 'cancel' },
+              { text: 'UPGRADE NOW', onPress: () => router.push('/subscription') }
+            ]
+          );
+          setIsReloading(false);
+          return;
+        }
+      }
+
       const newLines = await generateMemeLines(uri, currentStyle, currentLanguage);
       setTopLines(newLines.top);
       setBottomLines(newLines.bottom);
 
-      // Update history if this is a saved meme
+      // --- SUPABASE SAVE STEP is now handled by the useEffect above ---
+      // which triggers when topLines/bottomLines change.
+      
+      // Update local history if needed
       if (id) {
+        const fullCaption = [...newLines.top, ...newLines.bottom].join(' ');
         await updateMemeInHistory(id, {
           topLines: newLines.top,
           bottomLines: newLines.bottom,
           style: currentStyle,
           language: currentLanguage,
-          caption: [...newLines.top, ...newLines.bottom].join(' ')
+          caption: fullCaption
         });
       }
+
     } catch (error) {
       console.error('Reload failed:', error);
     } finally {
       setIsReloading(false);
     }
+
   };
 
   const handleShare = async () => {
