@@ -58,3 +58,31 @@ CREATE POLICY "Users can insert their own memes." ON public.memes
 
 CREATE POLICY "Users can delete their own memes." ON public.memes
   FOR DELETE USING (auth.uid() = user_id);
+
+-- 7. STORAGE CONFIGURATION
+-- Ensure the 'memes' bucket exists
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('memes', 'memes', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- STORAGE POLICIES
+-- Allow public access to view memes (Necessary for <img> tags to work)
+DROP POLICY IF EXISTS "Public Access" ON storage.objects;
+CREATE POLICY "Public Access" ON storage.objects
+  FOR SELECT USING (bucket_id = 'memes');
+
+-- Allow authenticated users to upload their own memes
+DROP POLICY IF EXISTS "Users can upload memes" ON storage.objects;
+CREATE POLICY "Users can upload memes" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'memes' AND 
+    auth.role() = 'authenticated'
+  );
+
+-- Allow users to delete their own memes
+DROP POLICY IF EXISTS "Users can delete their own memes" ON storage.objects;
+CREATE POLICY "Users can delete their own memes" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'memes' AND 
+    auth.uid()::text = (storage.foldername(name))[1]
+  );

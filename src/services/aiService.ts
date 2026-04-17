@@ -129,19 +129,10 @@ export const generateMemeLines = async (
 
       console.error(`AI Generation Error with model ${modelName}:`, error);
 
-      // If we've exhausted models or it's a non-503 error, return fallback text
-      if (isLastModel) {
-        return {
-          top: ['AI IS SLEEPY', 'TRY AGAIN'],
-          bottom: ['MAYBE CHECK', 'CONNECTION'],
-        };
-      }
+      // Re-throw the error so the caller knows generation failed
+      throw error;
     }
   }
 
-  // Should never reach here due to the catch block handling return/continue
-  return {
-    top: ['AI IS SLEEPY', 'TRY AGAIN'],
-    bottom: ['MAYBE CHECK', 'CONNECTION'],
-  };
+  throw new Error('AI Generation failed after exhausting all models or encountering high demand.');
 };

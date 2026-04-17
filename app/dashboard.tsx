@@ -1,14 +1,13 @@
 import { Colors } from '@/constants/theme';
+import { useAuth } from '@/src/context/AuthContext';
+import { getUserMemes, getUserProfile } from '@/src/services/memeService';
 import { getMemeHistory, MemeItem } from '@/src/utils/historyManager';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ChevronRight, Image as ImageIcon, Plus, User, Zap, Search, Calendar, ChevronLeft, X } from 'lucide-react-native';
-import { useCallback, useState, useEffect } from 'react';
-import { supabase } from '@/src/lib/supabase';
-import { useAuth } from '@/src/context/AuthContext';
-import { ActivityIndicator, Dimensions, FlatList, Image, Platform, Pressable, StyleSheet, Text, View, TextInput, Alert, Modal } from 'react-native';
+import { ChevronRight, Image as ImageIcon, Plus, Search, User, X, Zap } from 'lucide-react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getUserMemes, getUserMemeCount, getUserProfile } from '@/src/services/memeService';
 
 import { useBilling } from '@/src/context/BillingContext';
 
@@ -23,12 +22,11 @@ export default function DashboardScreen() {
   const [memes, setMemes] = useState<MemeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedStyle, setSelectedStyle] = useState('All');
-  const [searchMode, setSearchMode] = useState<'name' | 'date'>('name');
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [memeCount, setMemeCount] = useState(0);
+  const [isSearching, setIsSearching] = useState(false);
 
 
   const { user, signOut } = useAuth();
@@ -42,6 +40,22 @@ export default function DashboardScreen() {
       fetchProfile();
     }
   }, [user]);
+
+  // Handle search debounce
+  useEffect(() => {
+    if (searchQuery !== debouncedSearch) {
+      setIsSearching(true);
+    }
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setIsSearching(false);
+      // Automatically close keyboard after search triggers (user requirement)
+      if (searchQuery.length > 0) {
+        Keyboard.dismiss();
+      }
+    }, 800); // Slightly longer delay to give user time to finish
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const fetchProfile = async () => {
     try {
@@ -69,7 +83,6 @@ export default function DashboardScreen() {
 
           // 2. Fetch memes from Supabase
           const dbMemes = await getUserMemes(user.id);
-          
           // 3. Transform to MemeItem structure (to keep UI code working)
           const transformed: MemeItem[] = dbMemes.map((m: any) => ({
             id: m.id,
@@ -105,24 +118,14 @@ export default function DashboardScreen() {
   };
 
   const filteredMemes = memes.filter(meme => {
-    // 1. Name Match
-    const matchesSearch = searchMode === 'date' || 
-                         meme.caption.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (meme.style?.toLowerCase() || '').includes(searchQuery.toLowerCase());
-    
-    // 2. Date Match
-    let matchesDate = true;
-    if (searchMode === 'date' && selectedDate) {
-      const memeDate = new Date(meme.createdAt);
-      matchesDate = memeDate.getFullYear() === selectedDate.getFullYear() &&
-                    memeDate.getMonth() === selectedDate.getMonth() &&
-                    memeDate.getDate() === selectedDate.getDate();
-    }
+    // 1. Name/Style Match
+    const matchesSearch = meme.caption.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      (meme.style?.toLowerCase() || '').includes(debouncedSearch.toLowerCase());
 
-    // 3. Style Match
+    // 2. Style Chip Match
     const matchesStyle = selectedStyle === 'All' || meme.style === selectedStyle;
-    
-    return matchesSearch && matchesDate && matchesStyle;
+
+    return matchesSearch && matchesStyle;
   });
 
   const renderItem = ({ item, index }: { item: MemeItem, index: number }) => (
@@ -132,16 +135,16 @@ export default function DashboardScreen() {
     >
       <Pressable
         style={styles.memeCard}
-        onPress={() => router.push({ 
-          pathname: '/result', 
-          params: { 
+        onPress={() => router.push({
+          pathname: '/result',
+          params: {
             id: item.id,
             uri: item.url,
             top: item.topLines ? JSON.stringify(item.topLines) : undefined,
             bottom: item.bottomLines ? JSON.stringify(item.bottomLines) : undefined,
             style: item.style,
             language: item.language
-          } 
+          }
         })}
       >
         <Image source={{ uri: item.url }} style={styles.memeImage} />
@@ -184,8 +187,8 @@ export default function DashboardScreen() {
         <View style={styles.bannerInfo}>
           <Zap color={Colors.dark.accent} size={24} fill={Colors.dark.accent} />
           <Text style={styles.bannerText}>
-            {(isPremium || profile?.is_subscriber) 
-              ? 'UNLIMITED FIRE ACTIVATED 🔥' 
+            {(isPremium || profile?.is_subscriber)
+              ? 'UNLIMITED FIRE ACTIVATED 🔥'
               : `${Math.max(0, 3 - memeCount)} MEMES REMAINING`}
           </Text>
         </View>
@@ -218,62 +221,45 @@ export default function DashboardScreen() {
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
-          ListHeaderComponent={() => (
+          ListHeaderComponent={
             <View style={styles.listHeader}>
               <View style={styles.searchRow}>
-                {searchMode === 'name' ? (
-                  <View style={styles.searchContainer}>
-                    <Search color={Colors.dark.muted} size={20} />
-                    <TextInput 
-                      placeholder="Find by name..."
-                      placeholderTextColor={Colors.dark.muted}
-                      style={styles.searchInput}
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                    />
-                  </View>
-                ) : (
-                  <Pressable 
-                    onPress={() => setShowDatePicker(true)}
-                    style={[styles.searchContainer, selectedDate && styles.dateActive]}
-                  >
-                    <Calendar color={selectedDate ? Colors.dark.accent : Colors.dark.muted} size={20} />
-                    <Text style={[styles.searchInput, !selectedDate && { color: Colors.dark.muted }]}>
-                      {selectedDate 
-                        ? selectedDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-                        : 'Select date...'}
-                    </Text>
-                    {selectedDate && (
-                      <Pressable onPress={() => setSelectedDate(null)} style={styles.clearDate}>
-                        <X color={Colors.dark.muted} size={16} />
-                      </Pressable>
-                    )}
-                  </Pressable>
-                )}
-                
-                <Pressable 
-                  onPress={() => setSearchMode(searchMode === 'name' ? 'date' : 'name')}
-                  style={[styles.modeToggle, searchMode === 'date' && styles.modeToggleActive]}
-                >
-                  {searchMode === 'name' ? (
-                    <Calendar color="#FFF" size={20} />
+                <View style={styles.searchContainer}>
+                  {isSearching ? (
+                    <ActivityIndicator size="small" color={Colors.dark.accent} style={{ marginRight: 0 }} />
                   ) : (
-                    <Search color="#FFF" size={20} />
+                    <Search color={Colors.dark.muted} size={20} />
                   )}
-                </Pressable>
+                  <TextInput
+                    placeholder="Find by name..."
+                    placeholderTextColor={Colors.dark.muted}
+                    style={styles.searchInput}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    onBlur={() => Keyboard.dismiss()}
+                  />
+                  {searchQuery.length > 0 && !isSearching && (
+                    <Pressable onPress={() => {
+                      setSearchQuery('');
+                      Keyboard.dismiss();
+                    }} style={styles.clearSearch}>
+                      <X color={Colors.dark.muted} size={18} />
+                    </Pressable>
+                  )}
+                </View>
               </View>
 
-              <FlatList 
+              <FlatList
                 horizontal
                 data={STYLES}
                 keyExtractor={(item) => item}
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.filterContainer}
                 renderItem={({ item }) => (
-                  <Pressable 
+                  <Pressable
                     onPress={() => setSelectedStyle(item)}
                     style={[
-                      styles.filterChip, 
+                      styles.filterChip,
                       selectedStyle === item && styles.filterChipActive
                     ]}
                   >
@@ -288,12 +274,12 @@ export default function DashboardScreen() {
               />
 
               <Text style={styles.sectionTitle}>
-                {searchQuery || selectedStyle !== 'All' 
-                  ? `${filteredMemes.length} RESULTS FOUND` 
+                {debouncedSearch || selectedStyle !== 'All'
+                  ? `${filteredMemes.length} RESULTS FOUND`
                   : 'YOUR CREATIONS'}
               </Text>
             </View>
-          )}
+          }
         />
       )}
 
@@ -310,94 +296,7 @@ export default function DashboardScreen() {
           <Text style={styles.fabText}>NEW</Text>
         </Pressable>
       </Animated.View>
-
-      <CustomDatePicker
-        visible={showDatePicker}
-        onClose={() => setShowDatePicker(false)}
-        selectedDate={selectedDate || new Date()}
-        onSelect={(date) => {
-          setSelectedDate(date);
-          setShowDatePicker(false);
-        }}
-      />
     </SafeAreaView>
-  );
-}
-
-function CustomDatePicker({ visible, onClose, selectedDate, onSelect }: any) {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  
-  const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
-  const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
-  
-  const year = currentMonth.getFullYear();
-  const month = currentMonth.getMonth();
-  const days = daysInMonth(year, month);
-  const startDay = firstDayOfMonth(year, month);
-  
-  const monthName = currentMonth.toLocaleString('default', { month: 'long' });
-  
-  const daysArray = [];
-  for (let i = 0; i < startDay; i++) daysArray.push(null);
-  for (let i = 1; i <= days; i++) daysArray.push(new Date(year, month, i));
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <View style={styles.datePickerContent}>
-          <View style={styles.modalHeader}>
-            <View>
-              <Text style={styles.modalTitle}>{monthName.toUpperCase()}</Text>
-              <Text style={styles.modalSubtitle}>{year}</Text>
-            </View>
-            <View style={styles.monthNav}>
-              <Pressable onPress={() => setCurrentMonth(new Date(year, month - 1))} style={styles.navIcon}>
-                <ChevronLeft color="#FFF" size={20} />
-              </Pressable>
-              <Pressable onPress={() => setCurrentMonth(new Date(year, month + 1))} style={styles.navIcon}>
-                <ChevronRight color="#FFF" size={20} />
-              </Pressable>
-            </View>
-          </View>
-          
-          <View style={styles.calendarGrid}>
-            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-              <Text key={`head-${i}`} style={styles.dayHead}>{d}</Text>
-            ))}
-            {daysArray.map((date, i) => {
-              if (!date) return <View key={`empty-${i}`} style={styles.dayCell} />;
-              
-              const isSelected = selectedDate && 
-                date.getDate() === selectedDate.getDate() && 
-                date.getMonth() === selectedDate.getMonth() &&
-                date.getFullYear() === selectedDate.getFullYear();
-                
-              const isToday = new Date().toDateString() === date.toDateString();
-
-              return (
-                <Pressable 
-                  key={`day-${i}`} 
-                  style={[styles.dayCell, isSelected && styles.daySelected]} 
-                  onPress={() => onSelect(date)}
-                >
-                  <Text style={[
-                    styles.dayText, 
-                    isSelected && styles.dayTextSelected,
-                    isToday && !isSelected && { color: Colors.dark.accent }
-                  ]}>
-                    {date.getDate()}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          
-          <Pressable style={styles.closeBtn} onPress={onClose}>
-            <Text style={styles.closeBtnText}>CANCEL</Text>
-          </Pressable>
-        </View>
-      </Pressable>
-    </Modal>
   );
 }
 
@@ -582,25 +481,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.05)',
   },
-  dateActive: {
-    borderColor: Colors.dark.accent,
-    backgroundColor: 'rgba(0, 255, 102, 0.05)',
-  },
-  clearDate: {
+  clearSearch: {
     padding: 4,
-  },
-  modeToggle: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
-    backgroundColor: Colors.dark.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-  },
-  modeToggleActive: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   searchInput: {
     flex: 1,
@@ -608,71 +490,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginLeft: 12,
     fontWeight: '600',
-  },
-  datePickerContent: {
-    backgroundColor: '#1A1A1B',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: Platform.OS === 'ios' ? 48 : 32,
-  },
-  modalSubtitle: {
-    color: Colors.dark.muted,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  monthNav: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  navIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  calendarGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 20,
-  },
-  dayHead: {
-    width: `${100 / 7}%`,
-    textAlign: 'center',
-    color: Colors.dark.muted,
-    fontSize: 12,
-    fontWeight: '900',
-    marginBottom: 12,
-  },
-  dayCell: {
-    width: `${100 / 7}%`,
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 12,
-  },
-  daySelected: {
-    backgroundColor: Colors.dark.accent,
-  },
-  dayText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  dayTextSelected: {
-    color: '#000',
-    fontWeight: '900',
-  },
-  closeBtn: {
-    marginTop: 24,
-    alignItems: 'center',
-  },
-  closeBtnText: {
-    color: Colors.dark.muted,
-    fontWeight: '900',
-    letterSpacing: 1,
   },
   filterContainer: {
     gap: 10,

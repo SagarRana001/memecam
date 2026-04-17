@@ -12,7 +12,7 @@ import { useBilling } from '@/src/context/BillingContext';
 export default function SubscriptionScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
-  const { isPremium, products, loading, requestPurchase, restorePurchases } = useBilling();
+  const { isPremium, subscription, products, loading, requestPurchase, restorePurchases, simulateSuccessPurchase } = useBilling();
 
   const premiumProduct = products.find(p => p.productId === 'memecam_premium_monthly');
   const priceLabel = premiumProduct ? `SUBSCRIBE FOR ${premiumProduct.localizedPrice}` : 'SUBSCRIBE FOR 799INR/mo';
@@ -81,9 +81,16 @@ export default function SubscriptionScreen() {
               disabled={loading}
             />
           ) : (
-            <View style={styles.premiumBadge}>
-              <Check color="#000" size={20} />
-              <Text style={styles.premiumBadgeText}>ACTIVE SUBSCRIPTION</Text>
+            <View style={styles.premiumContainer}>
+              <View style={styles.premiumBadge}>
+                <Check color="#000" size={20} />
+                <Text style={styles.premiumBadgeText}>ACTIVE SUBSCRIPTION</Text>
+              </View>
+              {subscription?.current_period_end && (
+                <Text style={styles.renewalText}>
+                  Renews on {new Date(subscription.current_period_end).toLocaleDateString()}
+                </Text>
+              )}
             </View>
           )}
 
@@ -91,6 +98,17 @@ export default function SubscriptionScreen() {
             <Pressable onPress={restorePurchases}>
               <Text style={styles.restoreText}>Restore Purchases</Text>
             </Pressable>
+
+            {__DEV__ && (
+              <Pressable 
+                onPress={simulateSuccessPurchase}
+                style={{ marginTop: 20, backgroundColor: 'rgba(0,255,102,0.1)', padding: 10, borderRadius: 8 }}
+              >
+                <Text style={{ color: Colors.dark.accent, fontSize: 12, fontWeight: '700' }}>
+                  DEBUG: SIMULATE SUCCESS
+                </Text>
+              </Pressable>
+            )}
           </View>
 
           <View style={styles.dangerZone}>
@@ -214,6 +232,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '900',
     letterSpacing: 1,
+  },
+  premiumContainer: {
+    gap: 12,
+    alignItems: 'center',
+  },
+  renewalText: {
+    color: Colors.dark.muted,
+    fontSize: 14,
+    fontWeight: '500',
   },
   dangerZone: {
     flexDirection: 'row',

@@ -11,25 +11,39 @@ const itemSkus = Platform.select({
   android: ['memecam_premium_monthly'],
 }) || [];
 
+
+interface UserSubscription {
+  status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'expired' | 'unpaid';
+  current_period_end: string | null;
+  product_id: string;
+}
+
 interface BillingContextType {
   isPremium: boolean;
+  subscription: UserSubscription | null;
   products: IAP.Product[];
   loading: boolean;
   requestPurchase: (sku: string) => Promise<void>;
   restorePurchases: () => Promise<void>;
+  refreshSubscriptionStatus: () => Promise<void>;
+  simulateSuccessPurchase: () => Promise<void>;
 }
 
 const BillingContext = createContext<BillingContextType>({
   isPremium: false,
+  subscription: null,
   products: [],
   loading: true,
   requestPurchase: async () => {},
   restorePurchases: async () => {},
+  refreshSubscriptionStatus: async () => {},
+  simulateSuccessPurchase: async () => {},
 });
 
 export const BillingProvider = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   const [isPremium, setIsPremium] = useState(false);
+  const [subscription, setSubscription] = useState<UserSubscription | null>(null);
 
   const [products, setProducts] = useState<IAP.Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,21 +92,14 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
           }
           
           await IAP.finishTransaction({ purchase, isConsumable: false });
-          setIsPremium(true);
           
-          // --- SYNC TO SUPABASE ---
-          if (user?.id) {
-            await supabase
-              .from('profiles')
-              .update({ is_subscriber: true })
-              .eq('id', user.id);
-            console.log('Premium status synced to Supabase! 🚀');
-          }
+          // --- SYNC TO BACKEND ---
+          await syncPurchaseWithBackend(purchase);
 
           Alert.alert('Success', 'Premium subscription activated!');
 
         } catch (ackErr) {
-          console.warn('IAP: Ack Error', ackErr);
+          console.warn('IAP: Finalization Error', ackErr);
         }
       }
     });
@@ -136,6 +143,97 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     }
   };
 
+  const refreshSubscriptionStatus = useCallback(async () => {
+    if (!user?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('user_subscriptions')
+        .select('status, current_period_end, product_id')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+
+      if (data) {
+        setSubscription(data as UserSubscription);
+        setIsPremium(['active', 'trialing'].includes(data.status));
+      } else {
+        setIsPremium(false);
+        setSubscription(null);
+      }
+    } catch (err) {
+      console.error('Error refreshing subscription:', err);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    refreshSubscriptionStatus();
+  }, [refreshSubscriptionStatus]);
+
+  const syncPurchaseWithBackend = async (purchase: IAP.Purchase) => {
+    if (!user?.id) return;
+
+    try {
+      // 1. Log the transaction attempt immediately
+      const { error: historyError } = await supabase
+        .from('payment_history')
+        .insert({
+          user_id: user.id,
+          transaction_id: purchase.transactionId,
+          product_id: purchase.productId,
+          purchase_token: purchase.purchaseToken,
+          status: 'succeeded', // Ideally 'pending' until verified
+          amount_micros: 799000000, // Hardcoded for now, should come from product data
+          currency: 'INR'
+        });
+
+      if (historyError) console.warn('Payment recording error:', historyError);
+
+      // 2. Update the subscription state
+      // NOTE: In a production app, this should be done by an Edge Function 
+      // responding to the purchase verification or a webhook.
+      const expiryDate = new Date();
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
+
+      const { error: subError } = await supabase
+        .from('user_subscriptions')
+        .upsert({
+          user_id: user.id,
+          status: 'active',
+          product_id: purchase.productId,
+          platform: Platform.OS,
+          current_period_end: expiryDate.toISOString(),
+          external_subscription_id: purchase.transactionId,
+        }, { onConflict: 'user_id' });
+
+      if (subError) throw subError;
+      
+      await refreshSubscriptionStatus();
+    } catch (err) {
+      console.error('Sync error:', err);
+    }
+  };
+
+  const simulateSuccessPurchase = async () => {
+    console.log('--- SIMULATING SUCCESSFUL PURCHASE ---');
+    const mockPurchase: IAP.Purchase = {
+      transactionId: `mock_${Date.now()}`,
+      productId: 'memecam_premium_monthly',
+      purchaseToken: `mock_token_${Math.random()}`,
+      transactionReceipt: 'mock_receipt',
+      purchaseStateAndroid: 1,
+      // @ts-ignore - Minimal fields needed for our sync logic
+      transactionDate: Date.now(),
+    };
+    
+    setLoading(true);
+    await syncPurchaseWithBackend(mockPurchase);
+    setLoading(false);
+  };
+
   const requestPurchase = async (sku: string) => {
     try {
       setLoading(true);
@@ -151,6 +249,8 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     try {
       setLoading(true);
       await checkCurrentPurchases();
+      await refreshSubscriptionStatus();
+      
       if (isPremium) {
         Alert.alert('Restore', 'Your premium subscription has been restored.');
       } else {
@@ -166,10 +266,13 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
   return (
     <BillingContext.Provider value={{ 
       isPremium, 
+      subscription,
       products, 
       loading, 
       requestPurchase, 
-      restorePurchases 
+      restorePurchases,
+      refreshSubscriptionStatus,
+      simulateSuccessPurchase
     }}>
       {children}
     </BillingContext.Provider>

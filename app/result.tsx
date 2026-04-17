@@ -152,8 +152,9 @@ export default function ResultScreen() {
         });
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Reload failed:', error);
+      Alert.alert('AI Error', error.message || 'Failed to brainstorm more fire. Try again later! 🔥');
     } finally {
       setIsReloading(false);
     }
