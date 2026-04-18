@@ -20,7 +20,7 @@ export const processMemeImage = async (uri: string): Promise<ProcessedImage> => 
     const originX = (result.width - size) / 2;
     const originY = (result.height - size) / 2;
 
-    // Perform Square Crop and Compress to 256x256
+    // Perform Square Crop and Keep High Resolution (1024x1024)
     const processed = await ImageManipulator.manipulateAsync(
       uri,
       [
@@ -34,13 +34,13 @@ export const processMemeImage = async (uri: string): Promise<ProcessedImage> => 
         },
         {
           resize: {
-            width: 256,
-            height: 256,
+            width: 1024,
+            height: 1024,
           },
         },
       ],
       { 
-        compress: 0.8, 
+        compress: 1.0, 
         format: ImageManipulator.SaveFormat.JPEG 
       }
     );

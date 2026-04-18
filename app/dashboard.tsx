@@ -3,13 +3,14 @@ import { useAuth } from '@/src/context/AuthContext';
 import { getUserMemes, getUserProfile } from '@/src/services/memeService';
 import { getMemeHistory, MemeItem } from '@/src/utils/historyManager';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { ChevronRight, Image as ImageIcon, Plus, Search, User, X, Zap } from 'lucide-react-native';
+import { AlertTriangle, ChevronRight, Image as ImageIcon, Menu, Plus, RotateCcw, Search, X, Zap } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useBilling } from '@/src/context/BillingContext';
+import { useAlert } from '@/src/context/AlertContext';
 
 
 const { width } = Dimensions.get('window');
@@ -19,6 +20,8 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { showAlert } = useAlert();
   const [memes, setMemes] = useState<MemeItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -27,6 +30,7 @@ export default function DashboardScreen() {
   const [profile, setProfile] = useState<any>(null);
   const [memeCount, setMemeCount] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
+  const [hasError, setHasError] = useState(false);
 
 
   const { user, signOut } = useAuth();
@@ -74,6 +78,7 @@ export default function DashboardScreen() {
       const loadHistory = async () => {
         if (!user) return;
         setIsLoading(true);
+        setHasError(false);
         try {
           // 1. Fetch profile/count for the banner
           const profileData = await getUserProfile(user.id);
@@ -98,9 +103,17 @@ export default function DashboardScreen() {
           setMemes(transformed);
         } catch (error) {
           console.error('Failed to load Supabase memes:', error);
-          // Fallback to local if needed, or show error
-          const history = await getMemeHistory();
-          setMemes(history);
+          setHasError(true);
+          // Fallback to local as a last resort
+          try {
+            const history = await getMemeHistory();
+            if (history.length > 0) {
+              setMemes(history);
+              setHasError(false); // We have some data to show
+            }
+          } catch (e) {
+            console.error('Local fallback failed:', e);
+          }
         } finally {
           setIsLoading(false);
         }
@@ -110,11 +123,34 @@ export default function DashboardScreen() {
 
   );
 
-  const handleLogout = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: signOut }
-    ]);
+  const handleAccountMenu = () => {
+    showAlert({
+      title: 'Account Settings',
+      message: 'What would you like to do in the fire lab?',
+      type: 'info',
+      buttons: [
+        { text: 'Sign Out', style: 'default', onPress: signOut },
+        { 
+          text: 'Delete Account', 
+          style: 'destructive', 
+          onPress: () => {
+            // Re-confirm for safety
+            setTimeout(() => {
+              showAlert({
+                title: 'Are you sure?',
+                message: 'This will extinguish all your fire forever. This action cannot be undone.',
+                type: 'error',
+                buttons: [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete Forever', style: 'destructive', onPress: signOut }
+                ]
+              });
+            }, 500);
+          } 
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    });
   };
 
   const filteredMemes = memes.filter(meme => {
@@ -177,34 +213,56 @@ export default function DashboardScreen() {
           </Text>
           <Text style={styles.subtitle}>Your Daily Spark</Text>
         </View>
-        <Pressable style={styles.profileButton} onPress={handleLogout}>
-          <User color="#FFF" size={24} />
+        <Pressable style={styles.profileButton} onPress={handleAccountMenu}>
+          <Menu color="#FFF" size={24} />
         </Pressable>
       </View>
 
       {/* Quick Stats / Banner */}
-      <View style={styles.banner}>
+      <Pressable
+        style={styles.banner}
+        onPress={() => router.push('/subscription')}
+      >
         <View style={styles.bannerInfo}>
           <Zap color={Colors.dark.accent} size={24} fill={Colors.dark.accent} />
           <Text style={styles.bannerText}>
-            {(isPremium || profile?.is_subscriber)
+            {isPremium
               ? 'UNLIMITED FIRE ACTIVATED 🔥'
               : `${Math.max(0, 3 - memeCount)} MEMES REMAINING`}
           </Text>
         </View>
-        {!(isPremium || profile?.is_subscriber) && (
-
-          <Pressable onPress={() => router.push('/subscription')}>
-            <ChevronRight color={Colors.dark.accent} size={20} />
-          </Pressable>
+        {!isPremium && (
+          <ChevronRight color={Colors.dark.accent} size={20} />
         )}
-      </View>
+      </Pressable>
 
 
       {/* Meme Grid */}
       {isLoading ? (
         <View style={styles.loaderContainer}>
           <ActivityIndicator color={Colors.dark.accent} size="large" />
+        </View>
+      ) : hasError ? (
+        <View style={styles.emptyContainer}>
+          <AlertTriangle color={Colors.dark.accent} size={64} style={styles.emptyIcon} />
+          <Text style={styles.emptyTitle}>CONNECTION ERROR</Text>
+          <Text style={styles.emptyText}>The fire lab is having trouble reaching the source. Check your connection and try again.</Text>
+          <Pressable
+            style={styles.retryButton}
+            onPress={() => {
+              // Trigger a fresh loadHistory
+              // Since it's inside useFocusEffect, we can just toggle a local trigger if needed
+              // or just call fetchProfile for now which might fix some state
+              if (user) {
+                // We'll use a hack to re-trigger the focus effect or just manually load
+                // In a real app, this would be a shared function
+                router.replace('/dashboard');
+              }
+            }}
+          >
+            <RotateCcw color="#000" size={18} />
+            <Text style={styles.retryButtonText}>RETRY</Text>
+          </Pressable>
         </View>
       ) : memes.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -286,7 +344,7 @@ export default function DashboardScreen() {
       {/* Floating Action Button */}
       <Animated.View
         entering={FadeInDown.delay(400).springify()}
-        style={styles.fabContainer}
+        style={[styles.fabContainer, { bottom: Math.max(32, insets.bottom + 16) }]}
       >
         <Pressable
           style={styles.fab}
@@ -538,6 +596,21 @@ const styles = StyleSheet.create({
   badgeText: {
     color: '#000',
     fontSize: 8,
+    fontWeight: '900',
+  },
+  retryButton: {
+    flexDirection: 'row',
+    backgroundColor: Colors.dark.accent,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    marginTop: 24,
+    gap: 8,
+    alignItems: 'center',
+  },
+  retryButtonText: {
+    color: '#000',
+    fontSize: 14,
     fontWeight: '900',
   },
 });

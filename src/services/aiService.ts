@@ -58,11 +58,11 @@ export const generateMemeLines = async (
       : `Write the captions in ${language} (using its native script).`;
 
   const prompt = `
-    Analyze this image and generate a ${style.toUpperCase()} meme caption for it.
+    Analyze this image and generate a VERY SHORT, punchy ${style.toUpperCase()} meme caption for it.
     Vibe/Style: ${styleDescription}
     Language: ${languageInstruction}
 
-    You MUST provide exactly 4 short, punchy lines:
+    You MUST provide exactly 4 VERY SHORT, concise lines (max 3-4 words per line):
     - Two distinct lines for the TOP of the meme.
     - Two distinct lines for the BOTTOM of the meme.
     
@@ -115,7 +115,7 @@ export const generateMemeLines = async (
         }
       }
 
-      throw new Error('Could not parse AI response as valid JSON');
+      throw new Error('AI returned an invalid format. This usually happens with complex images. Please try again with a different style! 🔥');
     } catch (error: any) {
       const isLastModel = i === AVAILABLE_MODELS.length - 1;
       const is503 = error.message?.includes('503') || error.status === 503;
@@ -129,10 +129,19 @@ export const generateMemeLines = async (
 
       console.error(`AI Generation Error with model ${modelName}:`, error);
 
-      // Re-throw the error so the caller knows generation failed
-      throw error;
+      // Map common Gemini error messages to user-friendly ones
+      let userFriendlyMsg = error.message || 'The AI is currently brainstorming too hard. Please try again in a few seconds! 🔥';
+      
+      if (userFriendlyMsg.includes('Safety')) {
+        userFriendlyMsg = 'This image was flagged by our safety filters. Please try another one! 🛡️';
+      } else if (userFriendlyMsg.includes('quota')) {
+        userFriendlyMsg = 'Our cosmic AI limits have been reached for this minute. Try again shortly! ⏳';
+      }
+
+      // Re-throw with user-friendly message
+      throw new Error(userFriendlyMsg);
     }
   }
 
-  throw new Error('AI Generation failed after exhausting all models or encountering high demand.');
+  throw new Error('AI Brainstorming failed. Check your internet and try again soon! 🔥');
 };

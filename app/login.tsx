@@ -8,10 +8,12 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { signInWithGoogle } from '@/src/utils/auth';
 
 import { useAuth } from '@/src/context/AuthContext';
+import { useAlert } from '@/src/context/AlertContext';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { session, loading: authLoading } = useAuth();
+  const { showAlert } = useAlert();
   const [loading, setLoading] = useState(false);
 
   React.useEffect(() => {
@@ -30,7 +32,11 @@ export default function LoginScreen() {
       await signInWithGoogle();
       router.replace('/dashboard');
     } catch (error: any) {
-      Alert.alert('Login Failed', error.message);
+      showAlert({
+        title: 'Login Failed',
+        message: error.message || 'The fire lab could not verify your clearance. 🔥',
+        type: 'error'
+      });
     } finally {
       setLoading(false);
     }

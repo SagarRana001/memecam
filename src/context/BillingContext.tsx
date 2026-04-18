@@ -147,7 +147,8 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     if (!user?.id) return;
 
     try {
-      const { data, error } = await supabase
+      // 1. Check user_subscriptions for active store cycles
+      const { data: subData, error: subError } = await supabase
         .from('user_subscriptions')
         .select('status, current_period_end, product_id')
         .eq('user_id', user.id)
@@ -155,15 +156,23 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
         .limit(1)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (subError && subError.code !== 'PGRST116') throw subError;
 
-      if (data) {
-        setSubscription(data as UserSubscription);
-        setIsPremium(['active', 'trialing'].includes(data.status));
-      } else {
-        setIsPremium(false);
-        setSubscription(null);
-      }
+      // 2. Check profiles for manual "is_subscriber" flag
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('is_subscriber')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError && profileError.code !== 'PGRST116') throw profileError;
+
+      const hasActiveStoreSub = subData && ['active', 'trialing'].includes(subData.status);
+      const hasManualSub = profileData?.is_subscriber === true;
+
+      if (subData) setSubscription(subData as UserSubscription);
+      setIsPremium(!!(hasActiveStoreSub || hasManualSub));
+
     } catch (err) {
       console.error('Error refreshing subscription:', err);
     }

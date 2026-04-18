@@ -4,7 +4,7 @@ import { generateMemeLines } from '@/src/services/aiService';
 import * as MediaLibrary from 'expo-media-library';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { Check, Download, Home, RotateCcw, Share2, X } from 'lucide-react-native';
+import { Check, Download, Home, RotateCcw, Share2, X, AlertCircle } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, Image, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
@@ -16,6 +16,7 @@ import { updateMemeInHistory } from '@/src/utils/historyManager';
 import { useBilling } from '@/src/context/BillingContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { getUserMemeCount, saveMemeToDb, uploadMemeImage, incrementMemeCount } from '@/src/services/memeService';
+import { useAlert } from '@/src/context/AlertContext';
 
 import { ChevronDown } from 'lucide-react-native';
 import { useEffect } from 'react';
@@ -31,6 +32,7 @@ export default function ResultScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { isPremium } = useBilling();
+  const { showAlert } = useAlert();
 
   const { id, uri, top, bottom, style, language } = useLocalSearchParams<{
     id: string,
@@ -56,25 +58,19 @@ export default function ResultScreen() {
   const [hasSaved, setHasSaved] = useState(false);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isUploadingToCloud, setIsUploadingToCloud] = useState(false);
+  const [recentError, setRecentError] = useState<string | null>(null);
 
-  // Automatic Cloud Upload when meme is ready
-  useEffect(() => {
-    if (isImageLoaded && !isReloading && user && !isUploadingToCloud) {
-      autoUploadMeme();
-    }
-  }, [isImageLoaded, isReloading, topLines, bottomLines]);
+  // Automatic Cloud Upload is now DISABLED per user request.
+  // We only save to the bucket/DB when the user clicks "SAVE MEME".
 
-  const autoUploadMeme = async () => {
-    if (!viewShotRef.current?.capture || isUploadingToCloud) return;
+  const autoUploadMeme = async (existingCaptureUri?: string) => {
+    if ((!viewShotRef.current?.capture && !existingCaptureUri) || isUploadingToCloud) return;
 
     try {
       setIsUploadingToCloud(true);
       
-      // 1. Small delay to ensure the view is fully rendered with text
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      // 2. Capture the final rendered meme (image + text)
-      const captureUri = await viewShotRef.current.capture();
+      // 1. Capture the final rendered meme (image + text) if not provided
+      const captureUri = existingCaptureUri || await viewShotRef.current!.capture();
       
       // 3. Upload to Supabase Storage
       const publicUrl = await uploadMemeImage(captureUri, user!.id);
@@ -101,7 +97,11 @@ export default function ResultScreen() {
     } catch (error: any) {
       console.error('Cloud sync failed:', error);
       // For development, show the error so the user can debug bucket/permission issues
-      Alert.alert('Cloud Sync Error', error.message || 'Failed to backup your fire. 🔥');
+      showAlert({
+        title: 'Cloud Sync Failed',
+        message: error.message || 'Failed to backup your fire to the lab. 🔥',
+        type: 'error'
+      });
     } finally {
       setIsUploadingToCloud(false);
     }
@@ -114,20 +114,21 @@ export default function ResultScreen() {
     if (!uri) return;
     try {
       setIsReloading(true);
+      setRecentError(null);
 
       // --- RATE LIMIT CHECK ---
       if (user) {
         const count = await getUserMemeCount(user.id);
         if (!isPremium && count >= 3) {
-          Alert.alert(
-            'Limit Reached',
-
-            'You have used your 3 free memes. Upgrade to Premium for more fire! 🔥',
-            [
+          showAlert({
+            title: 'Limit Reached',
+            message: 'You have used your 3 free memes. Upgrade to Premium for more fire! 🔥',
+            type: 'warning',
+            buttons: [
               { text: 'Later', style: 'cancel' },
               { text: 'UPGRADE NOW', onPress: () => router.push('/subscription') }
             ]
-          );
+          });
           setIsReloading(false);
           return;
         }
@@ -154,7 +155,14 @@ export default function ResultScreen() {
 
     } catch (error: any) {
       console.error('Reload failed:', error);
-      Alert.alert('AI Error', error.message || 'Failed to brainstorm more fire. Try again later! 🔥');
+      const msg = error.message || 'Failed to brainstorm more fire. Try again later! 🔥';
+      setRecentError(msg);
+      // We still show the custom alert for high visibility
+      showAlert({
+        title: 'AI Error',
+        message: msg,
+        type: 'error'
+      });
     } finally {
       setIsReloading(false);
     }
@@ -183,7 +191,11 @@ export default function ResultScreen() {
       }
     } catch (error) {
       console.error('Sharing failed:', error);
-      Alert.alert('Share Failed', 'Could not share the meme image.');
+      showAlert({
+        title: 'Share Failed',
+        message: 'The lab could not share your meme. Try saving it instead!',
+        type: 'error'
+      });
     }
   };
 
@@ -199,7 +211,11 @@ export default function ResultScreen() {
       // 1. Request permissions
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Needed', 'We need access to your photos to save the meme.');
+        showAlert({
+          title: 'Permission Needed',
+          message: 'The fire lab needs access to your gallery to save memes!',
+          type: 'warning'
+        });
         return;
       }
 
@@ -213,12 +229,25 @@ export default function ResultScreen() {
       // 4. Save to media library
       await MediaLibrary.saveToLibraryAsync(captureUri);
 
+      // 5. ALSO Save to Supabase Bucket & DB (per user request)
+      await autoUploadMeme(captureUri);
+
       setHasSaved(true);
       setTimeout(() => setHasSaved(false), 3000);
-      Alert.alert('Success!', 'Meme saved to your gallery! 🖼️');
+      
+      showAlert({
+        title: 'Success!',
+        message: 'Meme saved to your gallery and the cloud! 🖼️🔥',
+        type: 'success',
+        autoDismiss: true
+      });
     } catch (error) {
       console.error('Saving failed:', error);
-      Alert.alert('Save Failed', 'Could not save the image to your gallery.');
+      showAlert({
+        title: 'Save Failed',
+        message: 'Could not save the fire to your gallery. 🔥',
+        type: 'error'
+      });
     } finally {
       setIsSaving(false);
     }
@@ -298,8 +327,22 @@ export default function ResultScreen() {
             {/* Reloading Overlay */}
             {isReloading && (
               <View style={styles.loadingOverlay}>
-                <ActivityIndicator color={Colors.dark.accent} size="large" />
-                <Text style={styles.loadingText}>REFRESHING FIRE...</Text>
+                {recentError ? (
+                  <>
+                    <AlertCircle color="#FF4D4D" size={48} />
+                    <Text style={[styles.loadingText, { color: '#FF4D4D' }]}>BRAINSTORMING FAILED</Text>
+                    <Text style={styles.errorSubtext}>{recentError}</Text>
+                    <Pressable style={styles.retryMiniButton} onPress={handleReload}>
+                      <RotateCcw color="#FFF" size={16} />
+                      <Text style={styles.retryMiniText}>TRY AGAIN</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
+                    <ActivityIndicator color={Colors.dark.accent} size="large" />
+                    <Text style={styles.loadingText}>REFRESHING FIRE...</Text>
+                  </>
+                )}
               </View>
             )}
 
@@ -506,5 +549,28 @@ const styles = StyleSheet.create({
   saveButton: {
     flex: 1,
     height: 60,
+  },
+  errorSubtext: {
+    color: '#A1A1AA',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 30,
+    fontWeight: '500',
+  },
+  retryMiniButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  retryMiniText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
 });

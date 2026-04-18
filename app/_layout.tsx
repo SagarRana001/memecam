@@ -9,12 +9,78 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { BillingProvider } from '@/src/context/BillingContext';
-import { useRouter, useSegments } from 'expo-router';
+import { AlertProvider } from '@/src/context/AlertContext';
+import { CustomAlert } from '@/src/components/CustomAlert';
+import { useRouter, useSegments, type ErrorBoundaryProps } from 'expo-router';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { Colors } from '@/constants/theme';
+import { AlertTriangle, RotateCcw } from 'lucide-react-native';
 
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return (
+    <View style={styles.errorContainer}>
+      <View style={styles.errorIcon}>
+        <AlertTriangle color={Colors.dark.accent} size={48} />
+      </View>
+      <Text style={styles.errorTitle}>SOMETHING WENT WRONG</Text>
+      <Text style={styles.errorMsg}>
+        The fire lab had a minor explosion. Don't worry, we're putting it out.
+      </Text>
+      <Pressable style={styles.retryButton} onPress={props.retry}>
+        <RotateCcw color="#000" size={20} />
+        <Text style={styles.retryText}>RETRY</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  errorContainer: {
+    flex: 1,
+    backgroundColor: '#0A0A0A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  errorIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(0, 255, 102, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  errorTitle: {
+    color: '#FFF',
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginBottom: 12,
+  },
+  errorMsg: {
+    color: Colors.dark.muted,
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+    fontWeight: '500',
+  },
+  retryButton: {
+    flexDirection: 'row',
+    backgroundColor: Colors.dark.accent,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 30,
+    gap: 12,
+    alignItems: 'center',
+  },
+  retryText: {
+    color: '#000',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+});
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -37,9 +103,11 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <AuthProvider>
-          <BillingProvider>
-            <RootLayoutNav />
-          </BillingProvider>
+          <AlertProvider>
+            <BillingProvider>
+              <RootLayoutNav />
+            </BillingProvider>
+          </AlertProvider>
         </AuthProvider>
       </GestureHandlerRootView>
     </SafeAreaProvider>
@@ -60,7 +128,7 @@ function RootLayoutNav() {
   useEffect(() => {
     if (loading) return;
 
-    const inAuthGroup = segments[0] === 'login' || segments[0] === '(auth)' || segments[0] === undefined;
+    const inAuthGroup = segments[0] === 'login' || segments[0] === 'terms' || segments[0] === '(auth)' || segments[0] === undefined;
 
     if (!session && !inAuthGroup) {
       // Redirect to landing if not logged in
@@ -82,6 +150,7 @@ function RootLayoutNav() {
       >
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
+        <Stack.Screen name="terms" />
 
         <Stack.Screen name="dashboard" />
         <Stack.Screen name="generator" />
@@ -89,6 +158,7 @@ function RootLayoutNav() {
         <Stack.Screen name="subscription" options={{ presentation: 'modal' }} />
       </Stack>
       <StatusBar style="light" translucent />
+      <CustomAlert />
     </ThemeProvider>
   );
 }

@@ -79,7 +79,9 @@ export default function LandingScreen() {
 
           <Text style={styles.disclaimer}>
             By signing up, you agree with our{' '}
-            <Text style={styles.link}>terms and conditions</Text>.
+            <Text style={styles.link} onPress={() => router.push('/terms')}>
+              terms and conditions
+            </Text>.
           </Text>
         </Animated.View>
       </View>

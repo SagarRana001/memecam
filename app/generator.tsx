@@ -8,17 +8,19 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { ChevronDown, Crown, ImagePlus, RotateCcw, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { SelectionModal } from '@/src/components/SelectionModal';
 import { useAuth } from '@/src/context/AuthContext';
 import { useBilling } from '@/src/context/BillingContext';
 import { getUserMemeCount, uploadMemeImage, saveMemeToDb } from '@/src/services/memeService';
+import { useAlert } from '@/src/context/AlertContext';
 
 
 export default function GeneratorScreen() {
   const router = useRouter();
+  const { showAlert } = useAlert();
   const [permission, requestPermission] = useCameraPermissions();
   const [mediaPermission, requestMediaPermission] = ImagePicker.useMediaLibraryPermissions();
 
@@ -26,6 +28,7 @@ export default function GeneratorScreen() {
   const [facing, setFacing] = useState<'back' | 'front'>('back');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [style, setStyle] = useState('Funny');
   const [language, setLanguage] = useState('English');
   const [showStyleModal, setShowStyleModal] = useState(false);
@@ -45,70 +48,83 @@ export default function GeneratorScreen() {
 
   const handleCapture = async () => {
     if (!cameraRef.current) {
-      Alert.alert('Error', 'Camera not ready');
+      showAlert({
+        title: 'Camera Error',
+        message: 'The fire lab camera is still warming up. Try again in a second!',
+        type: 'warning'
+      });
       return;
     }
 
     try {
+      // 1. CAPTURE IMMEDIATELY (Reduces shutter lag to minimum)
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 1.0,
+        base64: false,
+        skipProcessing: true, // Bypasses post-processing for instant results
+      });
+
+      if (!photo?.uri) {
+        throw new Error('No photo data');
+      }
+
+      // Show the still image immediately
+      setCapturedImage(photo.uri);
+
+      // 2. NOW start processing/network states
       setIsProcessing(true);
 
-      // --- RATE LIMIT CHECK ---
+      // 3. --- RATE LIMIT CHECK ---
       if (user) {
         const count = await getUserMemeCount(user.id);
         if (!isPremium && count >= 3) {
-          Alert.alert(
-            'Limit Reached',
-
-            'You have used your 3 free memes. Upgrade to Premium for unlimited fire! 🔥',
-            [
+          showAlert({
+            title: 'Limit Reached',
+            message: 'You have used your 3 free memes. Upgrade to Premium for more fire! 🔥',
+            type: 'warning',
+            buttons: [
               { text: 'Later', style: 'cancel' },
               { text: 'UPGRADE NOW', onPress: () => router.push('/subscription') }
             ]
-          );
+          });
           setIsProcessing(false);
           return;
         }
       }
 
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        base64: false,
+      const processed = await processMemeImage(photo.uri);
+
+      // --- AI GENERATION STEP ---
+      setIsGeneratingAI(true);
+      const memeLines = await generateMemeLines(processed.uri, style, language);
+      setIsGeneratingAI(false);
+
+      // --- SUPABASE PREPARATIONS ---
+      let memeId = Date.now().toString();
+
+      router.push({
+        pathname: '/result',
+        params: {
+          id: memeId,
+          uri: processed.uri,
+          top: JSON.stringify(memeLines.top),
+          bottom: JSON.stringify(memeLines.bottom),
+          style,
+          language
+        }
       });
-
-      if (photo?.uri) {
-        setIsProcessing(true);
-        const processed = await processMemeImage(photo.uri);
-
-        // --- AI GENERATION STEP ---
-        setIsGeneratingAI(true);
-        const memeLines = await generateMemeLines(processed.uri, style, language);
-        setIsGeneratingAI(false);
-
-        // --- SUPABASE PREPARATIONS ---
-        // We no longer upload here. We pass the local URI to ResultScreen, 
-        // which will capture the final meme (with text) and upload it.
-        let memeId = Date.now().toString();
-
-        router.push({
-          pathname: '/result',
-          params: {
-            id: memeId,
-            uri: processed.uri,
-            top: JSON.stringify(memeLines.top),
-            bottom: JSON.stringify(memeLines.bottom),
-            style,
-            language
-          }
-        });
-      } else {
-        throw new Error('No photo data');
-      }
 
     } catch (error) {
       console.error('Capture error:', error);
-      Alert.alert('Capture Failed', 'Please try again or select from gallery.');
+      showAlert({
+        title: 'Capture Failed',
+        message: 'The fire lab had a malfunction. Try again or pick from gallery!',
+        type: 'error'
+      });
+      setCapturedImage(null); // Reset to camera on error
     } finally {
       setIsProcessing(false);
+      setIsGeneratingAI(false);
     }
 
   };
@@ -119,31 +135,35 @@ export default function GeneratorScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 1.0,
       });
 
       if (!result.canceled && result.assets?.[0]?.uri) {
+        const pickedUri = result.assets[0].uri;
+        setCapturedImage(pickedUri);
         setIsProcessing(true);
 
         // --- RATE LIMIT CHECK ---
         if (user) {
           const count = await getUserMemeCount(user.id);
           if (!isPremium && count >= 3) {
-            Alert.alert(
-              'Limit Reached',
-
-              'You have used your 3 free memes. Upgrade to Premium for unlimited fire! 🔥',
-              [
+            showAlert({
+              title: 'Limit Reached',
+              message: 'You have used your 3 free memes. Upgrade to Premium for unlimited fire! 🔥',
+              type: 'warning',
+              buttons: [
                 { text: 'Later', style: 'cancel' },
                 { text: 'UPGRADE NOW', onPress: () => router.push('/subscription') }
               ]
-            );
+            });
             setIsProcessing(false);
+            setCapturedImage(null);
             return;
           }
         }
 
-        const processed = await processMemeImage(result.assets[0].uri);
+        const processed = await processMemeImage(pickedUri);
+        setCapturedImage(processed.uri);
 
         // --- AI GENERATION STEP ---
         setIsGeneratingAI(true);
@@ -169,6 +189,7 @@ export default function GeneratorScreen() {
     } catch (error) {
       console.error('Picker error:', error);
       Alert.alert('Error', 'Failed to pick image from gallery.');
+      setCapturedImage(null);
     } finally {
       setIsProcessing(false);
     }
@@ -217,11 +238,15 @@ export default function GeneratorScreen() {
 
       <View style={styles.content}>
         <View style={styles.cameraContainer}>
-          <CameraView
-            ref={cameraRef}
-            style={styles.camera}
-            facing={facing}
-          />
+          {capturedImage ? (
+            <Image source={{ uri: capturedImage }} style={styles.camera} resizeMode="cover" />
+          ) : (
+            <CameraView
+              ref={cameraRef}
+              style={styles.camera}
+              facing={facing}
+            />
+          )}
 
           {(isProcessing || isGeneratingAI) && (
             <View style={styles.loadingOverlay}>

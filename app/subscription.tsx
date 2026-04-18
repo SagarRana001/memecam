@@ -8,38 +8,96 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/src/context/AuthContext';
 import { useBilling } from '@/src/context/BillingContext';
+import { useAlert } from '@/src/context/AlertContext';
+import { deleteUserAccount } from '@/src/services/authService';
 
 export default function SubscriptionScreen() {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const { isPremium, subscription, products, loading, requestPurchase, restorePurchases, simulateSuccessPurchase } = useBilling();
+  const { showAlert } = useAlert();
 
   const premiumProduct = products.find(p => p.productId === 'memecam_premium_monthly');
   const priceLabel = premiumProduct ? `SUBSCRIBE FOR ${premiumProduct.localizedPrice}` : 'SUBSCRIBE FOR 799INR/mo';
 
+  const handleAccountMenu = () => {
+    showAlert({
+      title: 'Account Settings',
+      message: 'What would you like to do in the fire lab?',
+      type: 'info',
+      buttons: [
+        { text: 'Sign Out', style: 'default', onPress: signOut },
+        { 
+          text: 'Delete Account', 
+          style: 'destructive', 
+          onPress: () => {
+            // Re-confirm for safety
+            setTimeout(() => {
+              showAlert({
+                title: 'Are you sure?',
+                message: 'This will extinguish all your fire forever. This action cannot be undone.',
+                type: 'error',
+                buttons: [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete Forever', style: 'destructive', onPress: signOut }
+                ]
+              });
+            }, 500);
+          } 
+        },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    });
+  };
+
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout', style: 'destructive', onPress: async () => {
-          await signOut();
-          router.replace('/');
-        }
-      },
-    ]);
+    showAlert({
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out of the fire lab?',
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: signOut }
+      ]
+    });
   };
 
   const handleDelete = () => {
-    Alert.alert('Delete Account', 'This is permanent. Are you absolutely sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive', onPress: async () => {
-          // In a real app, delete user data then sign out
-          await signOut();
-          router.replace('/');
-        }
-      },
-    ]);
+    showAlert({
+      title: 'Delete Account',
+      message: 'This is permanent and will extinguish all your fire forever. Are you absolutely sure?',
+      type: 'error',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently', style: 'destructive', onPress: async () => {
+            try {
+              if (user?.id) {
+                await deleteUserAccount(user.id);
+                
+                showAlert({
+                  title: 'Account Deleted',
+                  message: 'Your fire has been extinguished. Redirecting...',
+                  type: 'success',
+                });
+                
+                // Allow user to see the success message briefly
+                setTimeout(async () => {
+                  await signOut();
+                  router.replace('/');
+                }, 2000);
+              }
+            } catch (err: any) {
+              showAlert({
+                title: 'Deletion Failed',
+                message: err.message || 'The lab failed to purge your data. 🔥',
+                type: 'error'
+              });
+            }
+          }
+        },
+      ]
+    });
   };
 
   return (
@@ -49,7 +107,7 @@ export default function SubscriptionScreen() {
           <X color="#FFF" size={28} />
         </Pressable>
         <Text style={styles.headerTitle}>PREMIUM</Text>
-        <Pressable onPress={handleLogout}>
+        <Pressable onPress={handleAccountMenu}>
           <Menu color="#FFF" size={28} />
         </Pressable>
       </View>
