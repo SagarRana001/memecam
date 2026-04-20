@@ -43,6 +43,10 @@ CREATE TABLE public.memes (
   user_id UUID REFERENCES auth.users ON DELETE CASCADE NOT NULL,
   image_url TEXT NOT NULL,
   caption TEXT,
+  top_lines JSONB,
+  bottom_lines JSONB,
+  style TEXT,
+  language TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

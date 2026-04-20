@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.memecam"
+      "bundleIdentifier": "com.aadmi.memecam"
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +19,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.memecam",
+      "package": "com.aadmi.memecam",
       "permissions": [
         "com.android.vending.BILLING",
         "android.permission.READ_EXTERNAL_STORAGE",

@@ -6,7 +6,7 @@ const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
 // Initialize the Google Generative AI SDK
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-const AVAILABLE_MODELS = ["gemini-2.5-flash"];
+const AVAILABLE_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"];
 
 export interface MemeLines {
   top: string[];
@@ -36,7 +36,6 @@ export const generateMemeLines = async (
     base64Data = await FileSystem.readAsStringAsync(imageUri, {
       encoding: EncodingType.Base64,
     });
-    console.log('Base64 Conversion: SUCCESS (Length:', base64Data.length, ')');
   } catch (err) {
     console.error('Failed to read image for AI processing:', err);
     throw err;
@@ -96,16 +95,11 @@ export const generateMemeLines = async (
       const result = await model.generateContent([prompt, imagePart]);
       const responseText = result.response.text();
 
-      console.log('--- RAW AI RESPONSE ---');
-      console.log(responseText);
-      console.log('-----------------------');
-
       // 4. Clean and parse JSON from the response
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         try {
           const parsed = JSON.parse(jsonMatch[0]);
-          console.log('JSON Parsing: SUCCESS');
           return {
             top: Array.isArray(parsed.top) ? parsed.top : [String(parsed.top || ''), ''],
             bottom: Array.isArray(parsed.bottom) ? parsed.bottom : [String(parsed.bottom || ''), ''],
@@ -117,25 +111,29 @@ export const generateMemeLines = async (
 
       throw new Error('AI returned an invalid format. This usually happens with complex images. Please try again with a different style! 🔥');
     } catch (error: any) {
+      const is503 = error.message?.includes('503') || error.status === 503 || error.message?.includes('demand');
       const isLastModel = i === AVAILABLE_MODELS.length - 1;
-      const is503 = error.message?.includes('503') || error.status === 503;
 
       if (is503 && !isLastModel) {
         console.warn(`Model ${modelName} is overloaded (503). Attempting fallback to ${AVAILABLE_MODELS[i + 1]}...`);
         // Small delay before retry
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 1500));
         continue;
       }
 
       console.error(`AI Generation Error with model ${modelName}:`, error);
 
       // Map common Gemini error messages to user-friendly ones
-      let userFriendlyMsg = error.message || 'The AI is currently brainstorming too hard. Please try again in a few seconds! 🔥';
+      let userFriendlyMsg = error.message || '';
       
-      if (userFriendlyMsg.includes('Safety')) {
+      if (userFriendlyMsg.includes('Safety') || userFriendlyMsg.includes('flagged')) {
         userFriendlyMsg = 'This image was flagged by our safety filters. Please try another one! 🛡️';
-      } else if (userFriendlyMsg.includes('quota')) {
+      } else if (userFriendlyMsg.includes('quota') || userFriendlyMsg.includes('429')) {
         userFriendlyMsg = 'Our cosmic AI limits have been reached for this minute. Try again shortly! ⏳';
+      } else if (userFriendlyMsg.includes('503') || userFriendlyMsg.includes('demand') || userFriendlyMsg.includes('overloaded')) {
+        userFriendlyMsg = 'The fire lab is extremely busy right now. Please try again in a few moments! 🔥';
+      } else {
+        userFriendlyMsg = 'The AI is currently brainstorming too hard. Please try again in a few seconds! 🧠🔥';
       }
 
       // Re-throw with user-friendly message

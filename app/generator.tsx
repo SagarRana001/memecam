@@ -1,21 +1,20 @@
 import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
+import { SelectionModal } from '@/src/components/SelectionModal';
+import { useAlert } from '@/src/context/AlertContext';
+import { useAuth } from '@/src/context/AuthContext';
+import { useBilling } from '@/src/context/BillingContext';
 import { generateMemeLines } from '@/src/services/aiService';
-import { saveMemeToHistory } from '@/src/utils/historyManager';
+import { getUserMemeCount } from '@/src/services/memeService';
 import { processMemeImage } from '@/src/utils/imageProcessor';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { ChevronDown, Crown, ImagePlus, RotateCcw, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Platform, Pressable, StyleSheet, Text, View, Linking } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { SelectionModal } from '@/src/components/SelectionModal';
-import { useAuth } from '@/src/context/AuthContext';
-import { useBilling } from '@/src/context/BillingContext';
-import { getUserMemeCount, uploadMemeImage, saveMemeToDb } from '@/src/services/memeService';
-import { useAlert } from '@/src/context/AlertContext';
 
 
 export default function GeneratorScreen() {
@@ -29,11 +28,11 @@ export default function GeneratorScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [style, setStyle] = useState('Funny');
-  const [language, setLanguage] = useState('English');
+  const [style, setStyle] = useState('Roast');
+  const [language, setLanguage] = useState('Hinglish');
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
-  
+
   const { user } = useAuth();
   const { isPremium } = useBilling();
 
@@ -41,12 +40,50 @@ export default function GeneratorScreen() {
   const STYLES = ['Funny', 'Dark', 'Roast', 'Cute'];
   const LANGUAGES = ['English', 'Hindi', 'Hinglish', 'Tamil', 'Telugu'];
 
-  useEffect(() => {
-    if (permission && !permission.granted) requestPermission();
-    if (mediaPermission && !mediaPermission.granted) requestMediaPermission();
-  }, [permission, mediaPermission]);
+  const ensureCameraPermission = async () => {
+    if (permission?.granted) return true;
+    
+    const result = await requestPermission();
+    if (result.granted) return true;
+
+    if (!result.canAskAgain) {
+      showAlert({
+        title: 'Camera Permission',
+        message: 'We need camera access to create memes. Please enable it in your device settings.',
+        type: 'warning',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'SETTINGS', onPress: () => Linking.openSettings() }
+        ]
+      });
+    }
+    return false;
+  };
+
+  const ensureMediaPermission = async () => {
+    if (mediaPermission?.granted) return true;
+
+    const result = await requestMediaPermission();
+    if (result.granted) return true;
+
+    if (!result.canAskAgain) {
+      showAlert({
+        title: 'Gallery Permission',
+        message: 'We need gallery access to pick images. Please enable it in your device settings.',
+        type: 'warning',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'SETTINGS', onPress: () => Linking.openSettings() }
+        ]
+      });
+    }
+    return false;
+  };
 
   const handleCapture = async () => {
+    const hasPermission = await ensureCameraPermission();
+    if (!hasPermission) return;
+
     if (!cameraRef.current) {
       showAlert({
         title: 'Camera Error',
@@ -114,11 +151,11 @@ export default function GeneratorScreen() {
         }
       });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Capture error:', error);
       showAlert({
         title: 'Capture Failed',
-        message: 'The fire lab had a malfunction. Try again or pick from gallery!',
+        message: error.message || 'The fire lab had a malfunction. Try again or pick from gallery!',
         type: 'error'
       });
       setCapturedImage(null); // Reset to camera on error
@@ -130,6 +167,9 @@ export default function GeneratorScreen() {
   };
 
   const pickImage = async () => {
+    const hasPermission = await ensureMediaPermission();
+    if (!hasPermission) return;
+
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -204,15 +244,6 @@ export default function GeneratorScreen() {
     );
   }
 
-  if (!permission.granted) {
-    return (
-      <View style={[styles.container, styles.center]}>
-        <Text style={styles.permissionText}>We need your permission to use the camera</Text>
-        <AnimatedButton title="Grant Permission" onPress={requestPermission} />
-      </View>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -240,12 +271,23 @@ export default function GeneratorScreen() {
         <View style={styles.cameraContainer}>
           {capturedImage ? (
             <Image source={{ uri: capturedImage }} style={styles.camera} resizeMode="cover" />
-          ) : (
+          ) : permission.granted ? (
             <CameraView
               ref={cameraRef}
               style={styles.camera}
               facing={facing}
             />
+          ) : (
+            <Pressable style={styles.permissionPlaceholder} onPress={ensureCameraPermission}>
+              <View style={styles.permissionIconContainer}>
+                <CameraView style={{ width: 1, height: 1, opacity: 0 }} />
+                <View style={styles.logoPlaceholder}>
+                  <RotateCcw color={Colors.dark.accent} size={40} />
+                </View>
+              </View>
+              <Text style={styles.permissionPlaceholderTitle}>CAMERA ACCESS REQUIRED</Text>
+              <Text style={styles.permissionPlaceholderSubtitle}>Tap to enable the fire lab lens</Text>
+            </Pressable>
           )}
 
           {(isProcessing || isGeneratingAI) && (
@@ -283,8 +325,8 @@ export default function GeneratorScreen() {
       </View>
 
       {/* Selection Modals */}
-      <SelectionModal 
-        visible={showStyleModal} 
+      <SelectionModal
+        visible={showStyleModal}
         onClose={() => setShowStyleModal(false)}
         options={STYLES}
         selected={style}
@@ -292,8 +334,8 @@ export default function GeneratorScreen() {
         title="SELECT STYLE"
       />
 
-      <SelectionModal 
-        visible={showLanguageModal} 
+      <SelectionModal
+        visible={showLanguageModal}
         onClose={() => setShowLanguageModal(false)}
         options={LANGUAGES}
         selected={language}
@@ -325,6 +367,40 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 20,
+  },
+  permissionPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0A0A0A',
+    padding: 20,
+  },
+  permissionIconContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(0, 255, 102, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 102, 0.1)',
+  },
+  logoPlaceholder: {
+    padding: 10,
+  },
+  permissionPlaceholderTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  permissionPlaceholderSubtitle: {
+    color: Colors.dark.muted,
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
   },
   header: {
     height: 60,
