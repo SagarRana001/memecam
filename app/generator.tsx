@@ -11,7 +11,8 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { ChevronDown, Crown, ImagePlus, RotateCcw, X } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
+import { UsageIndicator } from '@/src/components/UsageIndicator';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { ActivityIndicator, Alert, Image, Platform, Pressable, StyleSheet, Text, View, Linking } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -32,6 +33,8 @@ export default function GeneratorScreen() {
   const [language, setLanguage] = useState('Hinglish');
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [isOverLimit, setIsOverLimit] = useState(false);
+  const [checkLoading, setCheckLoading] = useState(true);
 
   const { user } = useAuth();
   const { isPremium } = useBilling();
@@ -39,6 +42,22 @@ export default function GeneratorScreen() {
 
   const STYLES = ['Funny', 'Dark', 'Roast', 'Cute'];
   const LANGUAGES = ['English', 'Hindi', 'Hinglish', 'Tamil', 'Telugu'];
+  
+  const checkLimit = useCallback(async () => {
+    if (!user) return;
+    try {
+      const count = await getUserMemeCount(user.id);
+      setIsOverLimit(!isPremium && count >= 3);
+    } catch (err) {
+      console.warn('Limit check failed:', err);
+    } finally {
+      setCheckLoading(false);
+    }
+  }, [user?.id, isPremium]);
+
+  useEffect(() => {
+    checkLimit();
+  }, [checkLimit]);
 
   const ensureCameraPermission = async () => {
     if (permission?.granted) return true;
@@ -261,6 +280,7 @@ export default function GeneratorScreen() {
               <ChevronDown color={Colors.dark.accent} size={16} />
             </Pressable>
           </View>
+          <UsageIndicator />
           <Pressable onPress={() => router.push('/subscription')} style={styles.navButton}>
             <Crown color={Colors.dark.accent} size={28} fill={Colors.dark.accent} />
           </Pressable>
@@ -296,6 +316,21 @@ export default function GeneratorScreen() {
               <Text style={styles.loadingText}>
                 {isGeneratingAI ? 'BRAINSTORMING FIRE...' : 'PREPARING FIRE...'}
               </Text>
+            </View>
+          )}
+
+          {isOverLimit && !checkLoading && (
+            <View style={styles.limitOverlay}>
+              <Crown color={Colors.dark.accent} size={64} fill={Colors.dark.accent} />
+              <Text style={styles.limitTitle}>LIMIT REACHED</Text>
+              <Text style={styles.limitText}>
+                You've used your 3 free sparks for today. Upgrade to Premium for unlimited fire! 🔥
+              </Text>
+              <AnimatedButton
+                title="UPGRADE TO PREMIUM"
+                onPress={() => router.push('/subscription')}
+                style={styles.upgradeButton}
+              />
             </View>
           )}
         </View>
@@ -497,5 +532,32 @@ const styles = StyleSheet.create({
     height: 64,
     borderRadius: 32,
     backgroundColor: '#FFF',
+  },
+  limitOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+    padding: 32,
+    gap: 20,
+  },
+  limitTitle: {
+    color: '#FFF',
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: 2,
+    textAlign: 'center',
+  },
+  limitText: {
+    color: Colors.dark.muted,
+    fontSize: 16,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 10,
+  },
+  upgradeButton: {
+    width: '100%',
+    height: 56,
   },
 });

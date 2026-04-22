@@ -26,7 +26,6 @@ interface BillingContextType {
   requestPurchase: (sku: string) => Promise<void>;
   restorePurchases: () => Promise<void>;
   refreshSubscriptionStatus: () => Promise<void>;
-  simulateSuccessPurchase: () => Promise<void>;
 }
 
 const BillingContext = createContext<BillingContextType>({
@@ -37,7 +36,6 @@ const BillingContext = createContext<BillingContextType>({
   requestPurchase: async () => {},
   restorePurchases: async () => {},
   refreshSubscriptionStatus: async () => {},
-  simulateSuccessPurchase: async () => {},
 });
 
 export const BillingProvider = ({ children }: { children: React.ReactNode }) => {
@@ -128,14 +126,41 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       
       
       setIsPremium(hasPremium);
+      
+      if (!user?.id) return;
 
       // --- SYNC TO SUPABASE ---
-      if (hasPremium && user?.id) {
+      if (hasPremium) {
+        // 1. Update Profile
         await supabase
           .from('profiles')
           .update({ is_subscriber: true })
           .eq('id', user.id);
+        
+        // 2. Ideally Sync user_subscriptions as well if missing
+        // This is a safety net for restores
+        const activePurchase = purchases.find(p => itemSkus.includes(p.productId));
+        if (activePurchase) {
+          const expiryDate = new Date();
+          expiryDate.setMonth(expiryDate.getMonth() + 1); // Approximate for restore
+
+          await supabase
+            .from('user_subscriptions')
+            .upsert({
+              user_id: user.id,
+              status: 'active',
+              product_id: activePurchase.productId,
+              platform: Platform.OS,
+              current_period_end: expiryDate.toISOString(),
+              external_subscription_id: activePurchase.transactionId,
+            }, { onConflict: 'user_id' });
+        }
+
         console.log('Premium status restored to Supabase! 🚀');
+      } else {
+        // Optional: If no purchases found during 'restore', we might want to check 
+        // if we should set is_subscriber to false. 
+        // But let's keep it safe for now and only update on positive restore.
       }
 
     } catch (err) {
@@ -187,6 +212,10 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
 
     try {
       // 1. Log the transaction attempt immediately
+      const product = products.find(p => p.productId === purchase.productId);
+      const amountMicros = product ? parseInt(product.priceAmountMicros) : 799000000;
+      const currency = product ? product.currency : 'INR';
+
       const { error: historyError } = await supabase
         .from('payment_history')
         .insert({
@@ -194,9 +223,9 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
           transaction_id: purchase.transactionId,
           product_id: purchase.productId,
           purchase_token: purchase.purchaseToken,
-          status: 'succeeded', // Ideally 'pending' until verified
-          amount_micros: 799000000, // Hardcoded for now, should come from product data
-          currency: 'INR'
+          status: 'succeeded',
+          amount_micros: amountMicros,
+          currency: currency
         });
 
       if (historyError) console.warn('Payment recording error:', historyError);
@@ -226,22 +255,6 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     }
   };
 
-  const simulateSuccessPurchase = async () => {
-    console.log('--- SIMULATING SUCCESSFUL PURCHASE ---');
-    const mockPurchase: IAP.Purchase = {
-      transactionId: `mock_${Date.now()}`,
-      productId: 'memecam_premium_monthly',
-      purchaseToken: `mock_token_${Math.random()}`,
-      transactionReceipt: 'mock_receipt',
-      purchaseStateAndroid: 1,
-      // @ts-ignore - Minimal fields needed for our sync logic
-      transactionDate: Date.now(),
-    };
-    
-    setLoading(true);
-    await syncPurchaseWithBackend(mockPurchase);
-    setLoading(false);
-  };
 
   const requestPurchase = async (sku: string) => {
     try {
@@ -281,7 +294,6 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       requestPurchase, 
       restorePurchases,
       refreshSubscriptionStatus,
-      simulateSuccessPurchase
     }}>
       {children}
     </BillingContext.Provider>

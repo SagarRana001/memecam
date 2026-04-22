@@ -14,11 +14,18 @@ import { deleteUserAccount } from '@/src/services/authService';
 export default function SubscriptionScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { isPremium, subscription, products, loading, requestPurchase, restorePurchases, simulateSuccessPurchase } = useBilling();
+  const { isPremium, subscription, products, loading, requestPurchase, restorePurchases } = useBilling();
   const { showAlert } = useAlert();
 
   const premiumProduct = products.find(p => p.productId === 'memecam_premium_monthly');
-  const priceLabel = premiumProduct ? `SUBSCRIBE FOR ${premiumProduct.localizedPrice}` : 'SUBSCRIBE FOR 799INR/mo';
+  
+  // Show trial info if available (Google Play specific check)
+  const hasTrial = premiumProduct && (premiumProduct as any).freeTrialPeriodAndroid;
+  const trialText = hasTrial ? '7-DAY FREE TRIAL • THEN ' : '';
+  
+  const priceLabel = premiumProduct 
+    ? `${trialText}${premiumProduct.localizedPrice}/mo` 
+    : '7-DAY FREE TRIAL • THEN 799INR/mo';
 
   const handleAccountMenu = () => {
     showAlert({
@@ -157,16 +164,6 @@ export default function SubscriptionScreen() {
               <Text style={styles.restoreText}>Restore Purchases</Text>
             </Pressable>
 
-            {__DEV__ && (
-              <Pressable 
-                onPress={simulateSuccessPurchase}
-                style={{ marginTop: 20, backgroundColor: 'rgba(0,255,102,0.1)', padding: 10, borderRadius: 8 }}
-              >
-                <Text style={{ color: Colors.dark.accent, fontSize: 12, fontWeight: '700' }}>
-                  DEBUG: SIMULATE SUCCESS
-                </Text>
-              </Pressable>
-            )}
           </View>
 
           <View style={styles.dangerZone}>

@@ -11,6 +11,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { useBilling } from '@/src/context/BillingContext';
 import { useAlert } from '@/src/context/AlertContext';
+import { UsageIndicator } from '@/src/components/UsageIndicator';
 
 
 const { width } = Dimensions.get('window');
@@ -223,14 +224,7 @@ export default function DashboardScreen() {
         style={styles.banner}
         onPress={() => router.push('/subscription')}
       >
-        <View style={styles.bannerInfo}>
-          <Zap color={Colors.dark.accent} size={24} fill={Colors.dark.accent} />
-          <Text style={styles.bannerText}>
-            {isPremium
-              ? 'UNLIMITED FIRE ACTIVATED 🔥'
-              : `${Math.max(0, 3 - memeCount)} MEMES REMAINING`}
-          </Text>
-        </View>
+        <UsageIndicator />
         {!isPremium && (
           <ChevronRight color={Colors.dark.accent} size={20} />
         )}
@@ -398,9 +392,9 @@ const styles = StyleSheet.create({
   },
   banner: {
     marginHorizontal: 24,
-    backgroundColor: 'rgba(0, 255, 102, 0.05)',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderRadius: 24,
+    padding: 4,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
