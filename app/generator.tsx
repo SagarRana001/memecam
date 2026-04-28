@@ -11,9 +11,8 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { ChevronDown, Crown, ImagePlus, RotateCcw, X } from 'lucide-react-native';
-import { UsageIndicator } from '@/src/components/UsageIndicator';
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { ActivityIndicator, Alert, Image, Platform, Pressable, StyleSheet, Text, View, Linking } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -42,7 +41,7 @@ export default function GeneratorScreen() {
 
   const STYLES = ['Funny', 'Dark', 'Roast', 'Cute'];
   const LANGUAGES = ['English', 'Hindi', 'Hinglish', 'Tamil', 'Telugu'];
-  
+
   const checkLimit = useCallback(async () => {
     if (!user) return;
     try {
@@ -61,7 +60,7 @@ export default function GeneratorScreen() {
 
   const ensureCameraPermission = async () => {
     if (permission?.granted) return true;
-    
+
     const result = await requestPermission();
     if (result.granted) return true;
 
@@ -280,7 +279,6 @@ export default function GeneratorScreen() {
               <ChevronDown color={Colors.dark.accent} size={16} />
             </Pressable>
           </View>
-          <UsageIndicator />
           <Pressable onPress={() => router.push('/subscription')} style={styles.navButton}>
             <Crown color={Colors.dark.accent} size={28} fill={Colors.dark.accent} />
           </Pressable>

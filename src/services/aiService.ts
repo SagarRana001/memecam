@@ -1,12 +1,10 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import * as FileSystem from 'expo-file-system/legacy';
 import { EncodingType } from 'expo-file-system/legacy';
 
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
-// Initialize the Google Generative AI SDK
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const OPENROUTER_API_KEY = process.env.EXPO_PUBLIC_OPENROUTER_API_KEY || '';
 
-const AVAILABLE_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"];
+// We use OpenRouter models now
+const AVAILABLE_MODELS = ["google/gemini-2.5-flash", "google/gemini-2.0-flash-001"];
 
 export interface MemeLines {
   top: string[];
@@ -15,17 +13,17 @@ export interface MemeLines {
 
 /**
  * Generates 4 lines of meme text (2 top, 2 bottom) for a given image URI.
- * Uses Google Gemini SDK for AI processing with fallback support for 503 errors.
+ * Uses OpenRouter API for AI processing with fallback support for 503 errors.
  */
 export const generateMemeLines = async (
   imageUri: string,
   style: string = 'Funny',
   language: string = 'English'
 ): Promise<MemeLines> => {
-  if (!GEMINI_API_KEY || GEMINI_API_KEY === 'your-gemini-api-key-here') {
+  if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY === 'your-openrouter-api-key-here') {
     // Fallback if API key is not configured
     return {
-      top: ['GIVE ME', 'GEMINI KEY'],
+      top: ['GIVE ME', 'OPENROUTER KEY'],
       bottom: ['SO I CAN', 'MAKE MEMES'],
     };
   }
@@ -43,25 +41,29 @@ export const generateMemeLines = async (
 
   // 2. Prepare the prompt
   const styleDescription = style === 'Roast'
-    ? 'Savage, insulting (in a funny way), and high-energy roast.'
+    ? 'Absolutely savage, brutal, unapologetic roast. Destroy the subject of this image with words. High-energy, viral internet-style mockery.'
     : style === 'Dark'
-      ? 'Edgy, cynical, and dark humor.'
+      ? 'Extremely edgy, cynical, bleak, and unhinged dark humor. The kind of joke you feel bad for laughing at. Uncomfortable but hilarious.'
       : style === 'Cute'
-        ? 'Wholesome, sweet, and adorable.'
-        : 'Humorous, witty, and lighthearted.';
+        ? 'Overwhelmingly wholesome, sweet, adorable, and pure. Soft, squishy internet-animal text style (e.g., "smol", "heckin"). Makes you go "aww".'
+        : 'Hilarious, incredibly relatable, highly viral internet meme humor. Clever, absurd, and punchy.';
 
   const languageInstruction = language === 'Hinglish'
-    ? 'Write the captions specifically in Hinglish (Hindi written in Roman/English script).'
+    ? 'Write the captions specifically in Hinglish (Hindi written in Roman/English script, e.g., "bhai kya kar raha hai"). Make it sound natural and colloquial.'
     : language === 'English'
-      ? 'Write the captions in English.'
-      : `Write the captions in ${language} (using its native script).`;
+      ? 'Write the captions in internet-fluent English.'
+      : `Write the captions natively in ${language} (using its native script).`;
 
   const prompt = `
-    Analyze this image and generate a VERY SHORT, punchy ${style.toUpperCase()} meme caption for it.
+    You are an expert, viral meme creator. Analyze this image and generate a VERY SHORT, incredibly punchy ${style.toUpperCase()} meme caption for it.
+    
     Vibe/Style: ${styleDescription}
     Language: ${languageInstruction}
 
-    You MUST provide exactly 4 VERY SHORT, concise lines (max 3-4 words per line):
+    Rules:
+    - Don't be boring. Go all-in on the requested vibe.
+    - Keep it internet-authentic. Use meme phrasing where appropriate.
+    - You MUST provide exactly 4 VERY SHORT, concise lines (max 3-5 words per line).
     - Two distinct lines for the TOP of the meme.
     - Two distinct lines for the BOTTOM of the meme.
     
@@ -72,28 +74,55 @@ export const generateMemeLines = async (
     }
   `;
 
-  // 3. Call Gemini SDK with model fallback
+  // 3. Call OpenRouter API with model fallback
   for (let i = 0; i < AVAILABLE_MODELS.length; i++) {
     const modelName = AVAILABLE_MODELS[i];
     try {
       console.log(`--- AI Brainstorming Start (Model: ${modelName}) ---`);
 
-      const model = genAI.getGenerativeModel({
-        model: modelName,
-        generationConfig: {
-          responseMimeType: "application/json",
-        }
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://memecam.app",
+          "X-Title": "Memecam",
+        },
+        body: JSON.stringify({
+          model: modelName,
+          max_tokens: 500, // Limit tokens to prevent 402 insufficient credit errors
+          response_format: { type: "json_object" },
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: prompt,
+                },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:image/jpeg;base64,${base64Data}`,
+                  },
+                },
+              ],
+            },
+          ],
+        }),
       });
 
-      const imagePart = {
-        inlineData: {
-          data: base64Data,
-          mimeType: "image/jpeg",
-        },
-      };
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorBody}`);
+      }
 
-      const result = await model.generateContent([prompt, imagePart]);
-      const responseText = result.response.text();
+      const data = await response.json();
+      const responseText = data.choices?.[0]?.message?.content;
+
+      if (!responseText) {
+        throw new Error("Empty response from OpenRouter");
+      }
 
       // 4. Clean and parse JSON from the response
       const jsonMatch = responseText.match(/\{[\s\S]*\}/);
@@ -123,10 +152,10 @@ export const generateMemeLines = async (
 
       console.error(`AI Generation Error with model ${modelName}:`, error);
 
-      // Map common Gemini error messages to user-friendly ones
+      // Map common OpenRouter/Gemini error messages to user-friendly ones
       let userFriendlyMsg = error.message || '';
       
-      if (userFriendlyMsg.includes('Safety') || userFriendlyMsg.includes('flagged')) {
+      if (userFriendlyMsg.includes('Safety') || userFriendlyMsg.includes('flagged') || userFriendlyMsg.includes('moderation')) {
         userFriendlyMsg = 'This image was flagged by our safety filters. Please try another one! 🛡️';
       } else if (userFriendlyMsg.includes('quota') || userFriendlyMsg.includes('429')) {
         userFriendlyMsg = 'Our cosmic AI limits have been reached for this minute. Try again shortly! ⏳';
