@@ -15,7 +15,10 @@ import { UsageIndicator } from '@/src/components/UsageIndicator';
 
 
 const { width } = Dimensions.get('window');
-const COLUMN_WIDTH = (width - 48) / 2;
+const IS_WEB = Platform.OS === 'web';
+const MAX_CONTENT_WIDTH = 1000;
+const CONTENT_WIDTH = IS_WEB ? Math.min(width, MAX_CONTENT_WIDTH) : width;
+const COLUMN_WIDTH = (CONTENT_WIDTH - 64) / 2;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -423,9 +426,13 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 24,
     paddingBottom: 120,
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: MAX_CONTENT_WIDTH,
   },
   columnWrapper: {
     justifyContent: 'space-between',
+    gap: 16,
   },
   cardContainer: {
     width: COLUMN_WIDTH,

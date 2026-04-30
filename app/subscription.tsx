@@ -2,30 +2,30 @@ import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
 import { useRouter } from 'expo-router';
 import { Check, Crown, LogOut, Menu, Trash2, X } from 'lucide-react-native';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useAlert } from '@/src/context/AlertContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useBilling } from '@/src/context/BillingContext';
-import { useAlert } from '@/src/context/AlertContext';
 import { deleteUserAccount } from '@/src/services/authService';
 
 export default function SubscriptionScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { isPremium, subscription, products, loading, requestPurchase, restorePurchases } = useBilling();
+  const { isPremium, subscription, products, loading, requestPurchase, restorePurchases /*, simulateSuccessPurchase*/ } = useBilling();
   const { showAlert } = useAlert();
 
   const premiumProduct = products.find(p => p.productId === 'memecam_premium_monthly');
-  
+
   // Show trial info if available (Google Play specific check)
   const hasTrial = premiumProduct && (premiumProduct as any).freeTrialPeriodAndroid;
   const trialText = hasTrial ? '7-DAY FREE TRIAL • THEN ' : '';
-  
-  const priceLabel = premiumProduct 
-    ? `${trialText}${premiumProduct.localizedPrice}/mo` 
-    : '7-DAY FREE TRIAL • THEN 799INR/mo';
+
+  const priceLabel = premiumProduct
+    ? `${trialText}${premiumProduct.localizedPrice}/mo`
+    : '7-DAY FREE TRIAL • THEN ₹4INR/mo';
 
   const handleAccountMenu = () => {
     showAlert({
@@ -34,9 +34,9 @@ export default function SubscriptionScreen() {
       type: 'info',
       buttons: [
         { text: 'Sign Out', style: 'default', onPress: signOut },
-        { 
-          text: 'Delete Account', 
-          style: 'destructive', 
+        {
+          text: 'Delete Account',
+          style: 'destructive',
           onPress: () => {
             // Re-confirm for safety
             setTimeout(() => {
@@ -50,7 +50,7 @@ export default function SubscriptionScreen() {
                 ]
               });
             }, 500);
-          } 
+          }
         },
         { text: 'Cancel', style: 'cancel' }
       ]
@@ -81,13 +81,13 @@ export default function SubscriptionScreen() {
             try {
               if (user?.id) {
                 await deleteUserAccount(user.id);
-                
+
                 showAlert({
                   title: 'Account Deleted',
                   message: 'Your fire has been extinguished. Redirecting...',
                   type: 'success',
                 });
-                
+
                 // Allow user to see the success message briefly
                 setTimeout(async () => {
                   await signOut();
@@ -143,6 +143,7 @@ export default function SubscriptionScreen() {
               title={loading ? "PROCESSING..." : priceLabel}
               onPress={() => requestPurchase('memecam_premium_monthly')}
               style={styles.subscribeButton}
+              textStyle={styles.subscribeButtonText}
               disabled={loading}
             />
           ) : (
@@ -163,6 +164,17 @@ export default function SubscriptionScreen() {
             <Pressable onPress={restorePurchases}>
               <Text style={styles.restoreText}>Restore Purchases</Text>
             </Pressable>
+
+            {/* {__DEV__ && (
+              <Pressable 
+                onPress={simulateSuccessPurchase}
+                style={{ marginTop: 20, backgroundColor: 'rgba(0,255,102,0.1)', padding: 10, borderRadius: 8 }}
+              >
+                <Text style={{ color: Colors.dark.accent, fontSize: 12, fontWeight: '700' }}>
+                  DEBUG: SIMULATE SUCCESS
+                </Text>
+              </Pressable>
+            )} */}
 
           </View>
 
@@ -263,6 +275,10 @@ const styles = StyleSheet.create({
   subscribeButton: {
     width: '100%',
     height: 64,
+  },
+  subscribeButtonText: {
+    fontSize: 13,
+    letterSpacing: 0,
   },
   secondaryActions: {
     alignItems: 'center',

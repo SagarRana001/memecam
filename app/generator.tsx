@@ -364,7 +364,7 @@ export default function GeneratorScreen() {
         options={STYLES}
         selected={style}
         onSelect={setStyle}
-        title="SELECT STYLE"
+        title="Enter Style"
       />
 
       <SelectionModal
@@ -373,7 +373,7 @@ export default function GeneratorScreen() {
         options={LANGUAGES}
         selected={language}
         onSelect={setLanguage}
-        title="SELECT LANGUAGE"
+        title="Enter Language"
       />
     </SafeAreaView>
   );
@@ -476,6 +476,7 @@ const styles = StyleSheet.create({
   },
   cameraContainer: {
     width: '100%',
+    maxWidth: 500,
     aspectRatio: 1,
     backgroundColor: '#1A1A1B',
     borderRadius: 24,

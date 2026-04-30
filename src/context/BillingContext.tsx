@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useAuth } from './AuthContext';
+import { useAlert } from './AlertContext';
 import { supabase } from '../lib/supabase';
 
-import { Platform, Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import * as IAP from 'react-native-iap';
 
 // Product IDs from various stores
@@ -23,7 +24,7 @@ interface BillingContextType {
   subscription: UserSubscription | null;
   products: IAP.Product[];
   loading: boolean;
-  requestPurchase: (sku: string) => Promise<void>;
+  requestPurchase: (sku: string, offerToken?: string) => Promise<void>;
   restorePurchases: () => Promise<void>;
   refreshSubscriptionStatus: () => Promise<void>;
 }
@@ -33,13 +34,15 @@ const BillingContext = createContext<BillingContextType>({
   subscription: null,
   products: [],
   loading: true,
-  requestPurchase: async () => {},
-  restorePurchases: async () => {},
-  refreshSubscriptionStatus: async () => {},
+  requestPurchase: async () => { },
+  restorePurchases: async () => { },
+  refreshSubscriptionStatus: async () => { },
+  // simulateSuccessPurchase: async () => {},
 });
 
 export const BillingProvider = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
+  const { showAlert } = useAlert();
   const [isPremium, setIsPremium] = useState(false);
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
 
@@ -52,14 +55,14 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       try {
         await IAP.initConnection();
         console.log('IAP: Connection Initialized');
-        
+
         if (Platform.OS === 'android') {
           await IAP.flushFailedPurchasesCachedAsPendingAndroid();
         }
 
-        const getProducts = await IAP.getProducts({ skus: itemSkus });
-        console.log('IAP: Products fetched:', getProducts);
-        setProducts(getProducts);
+        const getSubs = await IAP.getSubscriptions({ skus: itemSkus });
+        console.log('IAP: Subscriptions fetched:', getSubs);
+        setProducts(getSubs as any);
 
         // Check for existing purchases (Restore)
         await checkCurrentPurchases();
@@ -82,20 +85,23 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     const purchaseUpdateSubscription = IAP.purchaseUpdatedListener(async (purchase) => {
       console.log('IAP: Purchase Updated', purchase);
       const receipt = purchase.transactionReceipt;
-      
+
       if (receipt) {
         try {
           if (Platform.OS === 'android') {
             await IAP.acknowledgePurchaseAndroid({ token: purchase.purchaseToken! });
           }
-          
+
           await IAP.finishTransaction({ purchase, isConsumable: false });
-          
+
           // --- SYNC TO BACKEND ---
           await syncPurchaseWithBackend(purchase);
-
-          Alert.alert('Success', 'Premium subscription activated!');
-
+          
+          showAlert({
+            title: 'Success!',
+            message: 'Premium subscription activated! You are now fire-ready. 🔥',
+            type: 'success'
+          });
         } catch (ackErr) {
           console.warn('IAP: Finalization Error', ackErr);
         }
@@ -104,8 +110,12 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
 
     const purchaseErrorSubscription = IAP.purchaseErrorListener((error) => {
       console.warn('IAP: Purchase Error', error);
-      if (error.code !== 'E_USER_CANCELLED') {
-        Alert.alert('Purchase Error', error.message);
+      if (error.code !== 'E_USER_CANCELLED' && error.code !== 'USER_CANCELED') {
+        showAlert({
+          title: 'Purchase Error',
+          message: error.message || 'Something went wrong with the transaction.',
+          type: 'error'
+        });
       }
     });
 
@@ -119,14 +129,14 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     try {
       const purchases = await IAP.getAvailablePurchases();
       console.log('IAP: Available Purchases', purchases);
-      
+
       const hasPremium = purchases.some(
         (p) => itemSkus.includes(p.productId)
       );
-      
-      
+
+
       setIsPremium(hasPremium);
-      
+
       if (!user?.id) return;
 
       // --- SYNC TO SUPABASE ---
@@ -136,7 +146,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
           .from('profiles')
           .update({ is_subscriber: true })
           .eq('id', user.id);
-        
+
         // 2. Ideally Sync user_subscriptions as well if missing
         // This is a safety net for restores
         const activePurchase = purchases.find(p => itemSkus.includes(p.productId));
@@ -213,7 +223,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     try {
       // 1. Log the transaction attempt immediately
       const product = products.find(p => p.productId === purchase.productId);
-      const amountMicros = product ? parseInt(product.priceAmountMicros) : 799000000;
+      const amountMicros = product ? parseInt(product.priceAmountMicros) : 1000000;
       const currency = product ? product.currency : 'INR';
 
       const { error: historyError } = await supabase
@@ -248,7 +258,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
         }, { onConflict: 'user_id' });
 
       if (subError) throw subError;
-      
+
       await refreshSubscriptionStatus();
     } catch (err) {
       console.error('Sync error:', err);
@@ -256,12 +266,74 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
   };
 
 
+  // const simulateSuccessPurchase = async () => {
+  //   console.log('--- SIMULATING SUCCESSFUL PURCHASE ---');
+  //   const mockPurchase: IAP.Purchase = {
+  //     transactionId: `mock_${Date.now()}`,
+  //     productId: 'memecam_premium_monthly',
+  //     purchaseToken: `mock_token_${Math.random()}`,
+  //     transactionReceipt: 'mock_receipt',
+  //     purchaseStateAndroid: 1,
+  //     // @ts-ignore - Minimal fields needed for our sync logic
+  //     transactionDate: Date.now(),
+  //   };
+  //   
+  //   setLoading(true);
+  //   await syncPurchaseWithBackend(mockPurchase);
+  //   setLoading(false);
+  // };
+
   const requestPurchase = async (sku: string) => {
+    console.log('IAP: Requesting purchase for:', sku);
     try {
       setLoading(true);
-      await IAP.requestPurchase({ sku });
+
+      if (products.length === 0) {
+        showAlert({
+          title: 'Store Syncing',
+          message: 'Google Play is still processing your new subscription. Please try again in 30 minutes. 🔥',
+          type: 'info'
+        });
+        return;
+      }
+
+      const product = products.find(p => p.productId === sku);
+      if (!product) {
+        showAlert({
+          title: 'Product Not Found',
+          message: `The fire lab couldn't find product "${sku}". Please verify it matches the Play Console.`,
+          type: 'error'
+        });
+        return;
+      }
+
+      if (Platform.OS === 'android') {
+        const offerToken = (product as any)?.subscriptionOfferDetails?.[0]?.offerToken;
+        
+        if (!offerToken) {
+          showAlert({
+            title: 'Base Plan Missing',
+            message: 'No active base plan found. Please ensure you have "Activated" the base plan in Play Console.',
+            type: 'warning'
+          });
+          return;
+        }
+
+        console.log('IAP: Starting subscription flow with token:', offerToken);
+        await IAP.requestSubscription({
+          sku,
+          subscriptionOffers: [{ sku, offerToken }]
+        });
+      } else {
+        await IAP.requestSubscription({ sku });
+      }
     } catch (err: any) {
-      console.warn('IAP: Request Purchase Error', err.code, err.message);
+      console.warn('IAP: Request Subscription Error', err.code, err.message);
+      showAlert({
+        title: 'Purchase Failed',
+        message: err.message || 'The transaction could not be initialized.',
+        type: 'error'
+      });
     } finally {
       setLoading(false);
     }
@@ -274,26 +346,39 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       await refreshSubscriptionStatus();
       
       if (isPremium) {
-        Alert.alert('Restore', 'Your premium subscription has been restored.');
+        showAlert({
+          title: 'Purchases Restored',
+          message: 'Welcome back! Your premium subscription has been successfully restored. 🚀',
+          type: 'success'
+        });
       } else {
-        Alert.alert('Restore', 'No active subscriptions found.');
+        showAlert({
+          title: 'No Subscription',
+          message: 'No active premium subscriptions were found for this account.',
+          type: 'info'
+        });
       }
     } catch (err) {
-      Alert.alert('Restore', 'Failed to restore purchases.');
+      showAlert({
+        title: 'Restore Failed',
+        message: 'The fire lab failed to recover your purchase history.',
+        type: 'error'
+      });
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <BillingContext.Provider value={{ 
-      isPremium, 
+    <BillingContext.Provider value={{
+      isPremium,
       subscription,
-      products, 
-      loading, 
-      requestPurchase, 
+      products,
+      loading,
+      requestPurchase,
       restorePurchases,
       refreshSubscriptionStatus,
+      // simulateSuccessPurchase
     }}>
       {children}
     </BillingContext.Provider>
