@@ -17,15 +17,9 @@ export default function SubscriptionScreen() {
   const { isPremium, subscription, products, loading, requestPurchase, restorePurchases /*, simulateSuccessPurchase*/ } = useBilling();
   const { showAlert } = useAlert();
 
-  const premiumProduct = products.find(p => p.productId === 'memecam_premium_monthly');
+  const premiumProduct = products.find(p => p.id === 'memecam_premium_monthly');
 
-  // Show trial info if available (Google Play specific check)
-  const hasTrial = premiumProduct && (premiumProduct as any).freeTrialPeriodAndroid;
-  const trialText = hasTrial ? '7-DAY FREE TRIAL • THEN ' : '';
-
-  const priceLabel = premiumProduct
-    ? `${trialText}${premiumProduct.localizedPrice}/mo`
-    : '7-DAY FREE TRIAL • THEN ₹4INR/mo';
+  const priceLabel = '7-DAY FREE TRIAL • THEN ₹4INR/mo';
 
   const handleAccountMenu = () => {
     showAlert({

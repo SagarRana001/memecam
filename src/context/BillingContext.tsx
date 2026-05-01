@@ -1,10 +1,22 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { useAuth } from './AuthContext';
-import { useAlert } from './AlertContext';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAlert } from './AlertContext';
+import { useAuth } from './AuthContext';
 
-import { Alert, Platform } from 'react-native';
-import * as IAP from 'react-native-iap';
+import { Platform } from 'react-native';
+import {
+  acknowledgePurchaseAndroid,
+  endConnection,
+  finishTransaction,
+  getAvailablePurchases,
+  fetchProducts,
+  initConnection,
+  purchaseErrorListener,
+  purchaseUpdatedListener,
+  requestPurchase as requestPurchaseIAP,
+  type Product,
+  type Purchase
+} from 'react-native-iap';
 
 // Product IDs from various stores
 const itemSkus = Platform.select({
@@ -22,7 +34,7 @@ interface UserSubscription {
 interface BillingContextType {
   isPremium: boolean;
   subscription: UserSubscription | null;
-  products: IAP.Product[];
+  products: Product[];
   loading: boolean;
   requestPurchase: (sku: string, offerToken?: string) => Promise<void>;
   restorePurchases: () => Promise<void>;
@@ -46,23 +58,20 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
   const [isPremium, setIsPremium] = useState(false);
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
 
-  const [products, setProducts] = useState<IAP.Product[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 1. Initialize connection and fetch products
   useEffect(() => {
     const initIAP = async () => {
       try {
-        await IAP.initConnection();
+        await initConnection();
+        console.log("initConnection")
         console.log('IAP: Connection Initialized');
 
-        if (Platform.OS === 'android') {
-          await IAP.flushFailedPurchasesCachedAsPendingAndroid();
-        }
-
-        const getSubs = await IAP.getSubscriptions({ skus: itemSkus });
+        const getSubs = await fetchProducts({ skus: itemSkus, type: 'subs' });
         console.log('IAP: Subscriptions fetched:', getSubs);
-        setProducts(getSubs as any);
+        setProducts(getSubs as Product[] || []);
 
         // Check for existing purchases (Restore)
         await checkCurrentPurchases();
@@ -76,27 +85,27 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     initIAP();
 
     return () => {
-      IAP.endConnection();
+      endConnection();
     };
   }, []);
 
   // 2. Setup purchase listeners
   useEffect(() => {
-    const purchaseUpdateSubscription = IAP.purchaseUpdatedListener(async (purchase) => {
+    const purchaseUpdateSubscription = purchaseUpdatedListener(async (purchase) => {
       console.log('IAP: Purchase Updated', purchase);
       const receipt = purchase.transactionReceipt;
 
       if (receipt) {
         try {
           if (Platform.OS === 'android') {
-            await IAP.acknowledgePurchaseAndroid({ token: purchase.purchaseToken! });
+            await acknowledgePurchaseAndroid(purchase.purchaseToken!);
           }
 
-          await IAP.finishTransaction({ purchase, isConsumable: false });
+          await finishTransaction({ purchase, isConsumable: false });
 
           // --- SYNC TO BACKEND ---
           await syncPurchaseWithBackend(purchase);
-          
+
           showAlert({
             title: 'Success!',
             message: 'Premium subscription activated! You are now fire-ready. 🔥',
@@ -108,7 +117,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       }
     });
 
-    const purchaseErrorSubscription = IAP.purchaseErrorListener((error) => {
+    const purchaseErrorSubscription = purchaseErrorListener((error) => {
       console.warn('IAP: Purchase Error', error);
       if (error.code !== 'E_USER_CANCELLED' && error.code !== 'USER_CANCELED') {
         showAlert({
@@ -127,7 +136,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
 
   const checkCurrentPurchases = async () => {
     try {
-      const purchases = await IAP.getAvailablePurchases();
+      const purchases = await getAvailablePurchases();
       console.log('IAP: Available Purchases', purchases);
 
       const hasPremium = purchases.some(
@@ -217,12 +226,12 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     refreshSubscriptionStatus();
   }, [refreshSubscriptionStatus]);
 
-  const syncPurchaseWithBackend = async (purchase: IAP.Purchase) => {
+  const syncPurchaseWithBackend = async (purchase: Purchase) => {
     if (!user?.id) return;
 
     try {
       // 1. Log the transaction attempt immediately
-      const product = products.find(p => p.productId === purchase.productId);
+      const product = products.find(p => p.id === purchase.productId);
       const amountMicros = product ? parseInt(product.priceAmountMicros) : 1000000;
       const currency = product ? product.currency : 'INR';
 
@@ -297,7 +306,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
         return;
       }
 
-      const product = products.find(p => p.productId === sku);
+      const product = products.find(p => p.id === sku);
       if (!product) {
         showAlert({
           title: 'Product Not Found',
@@ -308,8 +317,11 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       }
 
       if (Platform.OS === 'android') {
-        const offerToken = (product as any)?.subscriptionOfferDetails?.[0]?.offerToken;
-        
+        const offerToken = 
+          (product as any)?.subscriptionOffers?.[0]?.offerTokenAndroid || 
+          (product as any)?.subscriptionOfferDetailsAndroid?.[0]?.offerToken ||
+          (product as any)?.subscriptionOfferDetails?.[0]?.offerToken;
+
         if (!offerToken) {
           showAlert({
             title: 'Base Plan Missing',
@@ -320,12 +332,24 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
         }
 
         console.log('IAP: Starting subscription flow with token:', offerToken);
-        await IAP.requestSubscription({
-          sku,
-          subscriptionOffers: [{ sku, offerToken }]
+        await requestPurchaseIAP({
+          type: 'subs',
+          request: {
+            google: {
+              skus: [sku],
+              subscriptionOffers: [{ sku, offerToken }]
+            }
+          }
         });
       } else {
-        await IAP.requestSubscription({ sku });
+        await requestPurchaseIAP({
+          type: 'subs',
+          request: {
+            apple: {
+              sku: sku
+            }
+          }
+        });
       }
     } catch (err: any) {
       console.warn('IAP: Request Subscription Error', err.code, err.message);
@@ -344,7 +368,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       setLoading(true);
       await checkCurrentPurchases();
       await refreshSubscriptionStatus();
-      
+
       if (isPremium) {
         showAlert({
           title: 'Purchases Restored',
