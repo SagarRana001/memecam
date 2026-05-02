@@ -2,7 +2,7 @@ import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
 import { useRouter } from 'expo-router';
 import { Check, Crown, LogOut, Menu, Trash2, X } from 'lucide-react-native';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -101,6 +101,17 @@ export default function SubscriptionScreen() {
     });
   };
 
+  const handleCancelSubscription = () => {
+    const url = Platform.select({
+      android: 'https://play.google.com/store/account/subscriptions?package=com.aadmi.memecam',
+      ios: 'https://apps.apple.com/account/subscriptions',
+    });
+
+    if (url) {
+      Linking.openURL(url);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -151,6 +162,9 @@ export default function SubscriptionScreen() {
                   Renews on {new Date(subscription.current_period_end).toLocaleDateString()}
                 </Text>
               )}
+              <Pressable onPress={handleCancelSubscription} style={styles.cancelButton}>
+                <Text style={styles.cancelButtonText}>CANCEL SUBSCRIPTION</Text>
+              </Pressable>
             </View>
           )}
 
@@ -306,6 +320,21 @@ const styles = StyleSheet.create({
     color: Colors.dark.muted,
     fontSize: 14,
     fontWeight: '500',
+  },
+  cancelButton: {
+    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  cancelButtonText: {
+    color: Colors.dark.muted,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
   dangerZone: {
     flexDirection: 'row',

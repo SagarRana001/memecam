@@ -9,7 +9,7 @@ import { getUserMemeCount } from '@/src/services/memeService';
 import { processMemeImage } from '@/src/utils/imageProcessor';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronDown, Crown, ImagePlus, RotateCcw, X } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -34,6 +34,7 @@ export default function GeneratorScreen() {
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [isOverLimit, setIsOverLimit] = useState(false);
   const [checkLoading, setCheckLoading] = useState(true);
+  const [isFlashing, setIsFlashing] = useState(false);
 
   const { user } = useAuth();
   const { isPremium } = useBilling();
@@ -57,6 +58,16 @@ export default function GeneratorScreen() {
   useEffect(() => {
     checkLimit();
   }, [checkLimit]);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Reset state when screen is focused (e.g. returning from result page)
+      setCapturedImage(null);
+      setIsProcessing(false);
+      setIsGeneratingAI(false);
+      setIsFlashing(false);
+    }, [])
+  );
 
   const ensureCameraPermission = async () => {
     if (permission?.granted) return true;
@@ -112,11 +123,16 @@ export default function GeneratorScreen() {
     }
 
     try {
-      // 1. CAPTURE IMMEDIATELY (Reduces shutter lag to minimum)
+      // 1. TRIGGER FEEDBACK IMMEDIATELY
+      setIsFlashing(true);
+      setTimeout(() => setIsFlashing(false), 150);
+      setIsProcessing(true); // Show loader immediately so UI doesn't feel stuck
+
+      // 2. CAPTURE
       const photo = await cameraRef.current.takePictureAsync({
         quality: 1.0,
         base64: false,
-        skipProcessing: true, // Bypasses post-processing for instant results
+        skipProcessing: true,
       });
 
       if (!photo?.uri) {
@@ -125,9 +141,6 @@ export default function GeneratorScreen() {
 
       // Show the still image immediately
       setCapturedImage(photo.uri);
-
-      // 2. NOW start processing/network states
-      setIsProcessing(true);
 
       // 3. --- RATE LIMIT CHECK ---
       if (user) {
@@ -165,7 +178,8 @@ export default function GeneratorScreen() {
           top: JSON.stringify(memeLines.top),
           bottom: JSON.stringify(memeLines.bottom),
           style,
-          language
+          language,
+          isNew: 'true'
         }
       });
 
@@ -180,6 +194,7 @@ export default function GeneratorScreen() {
     } finally {
       setIsProcessing(false);
       setIsGeneratingAI(false);
+      setIsFlashing(false);
     }
 
   };
@@ -239,7 +254,8 @@ export default function GeneratorScreen() {
             top: JSON.stringify(memeLines.top),
             bottom: JSON.stringify(memeLines.bottom),
             style,
-            language
+            language,
+            isNew: 'true'
           }
         });
       }
@@ -306,6 +322,13 @@ export default function GeneratorScreen() {
               <Text style={styles.permissionPlaceholderTitle}>CAMERA ACCESS REQUIRED</Text>
               <Text style={styles.permissionPlaceholderSubtitle}>Tap to enable the fire lab lens</Text>
             </Pressable>
+          )}
+
+          {isFlashing && (
+            <Animated.View 
+              entering={FadeIn.duration(100)}
+              style={styles.flashOverlay} 
+            />
           )}
 
           {(isProcessing || isGeneratingAI) && (
@@ -558,5 +581,10 @@ const styles = StyleSheet.create({
   upgradeButton: {
     width: '100%',
     height: 56,
+  },
+  flashOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#FFF',
+    zIndex: 50,
   },
 });

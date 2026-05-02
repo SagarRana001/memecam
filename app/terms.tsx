@@ -1,7 +1,7 @@
 import { Colors } from '@/constants/theme';
 import { useRouter } from 'expo-router';
 import { ChevronLeft } from 'lucide-react-native';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -74,6 +74,19 @@ export default function TermsScreen() {
             <Text style={styles.sectionText}>
               You may extinguish your "fire" (delete your account) at any time through the Settings menu in the app. This will permanently delete your profile and all generated memes from our servers.
             </Text>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>6. Web-based Deletion Request</Text>
+            <Text style={styles.sectionText}>
+              If you have uninstalled the app and wish to request account deletion, you can do so by contacting the fire lab directly.
+            </Text>
+            <Pressable 
+              onPress={() => Linking.openURL('mailto:cubiant@gmail.com?subject=Account Deletion Request')}
+              style={styles.linkButton}
+            >
+              <Text style={styles.linkText}>REQUEST DATA DELETION via EMAIL</Text>
+            </Pressable>
           </View>
 
           <View style={styles.divider} />
@@ -213,6 +226,22 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginLeft: 12,
     marginTop: 4,
+  },
+  linkButton: {
+    marginTop: 12,
+    backgroundColor: 'rgba(0, 255, 102, 0.1)',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 255, 102, 0.2)',
+    alignItems: 'center',
+  },
+  linkText: {
+    color: Colors.dark.accent,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
   divider: {
     height: 1,

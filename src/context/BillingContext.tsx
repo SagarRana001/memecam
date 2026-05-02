@@ -93,15 +93,17 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
   useEffect(() => {
     const purchaseUpdateSubscription = purchaseUpdatedListener(async (purchase) => {
       console.log('IAP: Purchase Updated', purchase);
-      const receipt = purchase.transactionReceipt;
-
-      if (receipt) {
+      
+      // In v15, we should check for 'purchased' state
+      if (purchase.purchaseState === 'purchased' || (purchase.transactionReceipt && Platform.OS === 'ios')) {
         try {
-          if (Platform.OS === 'android') {
+          if (Platform.OS === 'android' && !purchase.isAcknowledgedAndroid) {
             await acknowledgePurchaseAndroid(purchase.purchaseToken!);
+            console.log('IAP: Android Purchase Acknowledged');
           }
 
           await finishTransaction({ purchase, isConsumable: false });
+          console.log('IAP: Transaction Finished');
 
           // --- SYNC TO BACKEND ---
           await syncPurchaseWithBackend(purchase);
@@ -114,6 +116,8 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
         } catch (ackErr) {
           console.warn('IAP: Finalization Error', ackErr);
         }
+      } else if (purchase.purchaseState === 'pending') {
+        console.log('IAP: Purchase is pending...');
       }
     });
 
@@ -139,10 +143,28 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       const purchases = await getAvailablePurchases();
       console.log('IAP: Available Purchases', purchases);
 
+      // Handle unacknowledged purchases on Android
+      for (const p of purchases) {
+        if (Platform.OS === 'android' && !p.isAcknowledgedAndroid) {
+          try {
+            await acknowledgePurchaseAndroid(p.purchaseToken!);
+            console.log('IAP: Acknowledged missed purchase:', p.productId);
+          } catch (ackErr) {
+            console.warn('IAP: Failed to acknowledge missed purchase:', ackErr);
+          }
+        }
+        
+        // Always try to finish available purchases to keep the queue clean
+        try {
+          await finishTransaction({ purchase: p, isConsumable: false });
+        } catch (fErr) {
+          // Ignore if already finished
+        }
+      }
+
       const hasPremium = purchases.some(
         (p) => itemSkus.includes(p.productId)
       );
-
 
       setIsPremium(hasPremium);
 
@@ -157,7 +179,6 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
           .eq('id', user.id);
 
         // 2. Ideally Sync user_subscriptions as well if missing
-        // This is a safety net for restores
         const activePurchase = purchases.find(p => itemSkus.includes(p.productId));
         if (activePurchase) {
           const expiryDate = new Date();
@@ -171,19 +192,14 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
               product_id: activePurchase.productId,
               platform: Platform.OS,
               current_period_end: expiryDate.toISOString(),
-              external_subscription_id: activePurchase.transactionId,
+              external_subscription_id: activePurchase.transactionId || activePurchase.purchaseToken,
             }, { onConflict: 'user_id' });
         }
 
         console.log('Premium status restored to Supabase! 🚀');
-      } else {
-        // Optional: If no purchases found during 'restore', we might want to check 
-        // if we should set is_subscriber to false. 
-        // But let's keep it safe for now and only update on positive restore.
       }
-
     } catch (err) {
-      console.warn('IAP: Restore Error', err);
+      console.warn('IAP: Restore/Check Error', err);
     }
   };
 

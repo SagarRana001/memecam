@@ -28,15 +28,33 @@ export const generateMemeLines = async (
     };
   }
 
-  // 1. Read image as base64 (once, outside the loop)
+  // 1. Prepare image data (Handle remote vs local URIs)
   let base64Data = '';
+  let tempFileUri: string | null = null;
+  
   try {
-    base64Data = await FileSystem.readAsStringAsync(imageUri, {
+    let localUri = imageUri;
+    
+    // If it's a remote URL (e.g. from Supabase), download it to local cache first
+    if (imageUri.startsWith('http')) {
+      const fileName = `temp_${Date.now()}.jpg`;
+      const destination = `${FileSystem.cacheDirectory}${fileName}`;
+      const download = await FileSystem.downloadAsync(imageUri, destination);
+      localUri = download.uri;
+      tempFileUri = download.uri;
+    }
+
+    base64Data = await FileSystem.readAsStringAsync(localUri, {
       encoding: EncodingType.Base64,
     });
+
+    // Clean up temporary file if we created one
+    if (tempFileUri) {
+      await FileSystem.deleteAsync(tempFileUri, { idempotent: true }).catch(() => {});
+    }
   } catch (err) {
-    console.error('Failed to read image for AI processing:', err);
-    throw err;
+    console.error('Failed to prepare image for AI processing:', err);
+    throw new Error('Failed to analyze the image. Please check your internet and try again! 🔥');
   }
 
   // 2. Prepare the prompt

@@ -34,17 +34,20 @@ export default function ResultScreen() {
   const { isPremium } = useBilling();
   const { showAlert } = useAlert();
 
-  const { id, uri, top, bottom, style, language } = useLocalSearchParams<{
-    id: string,
-    uri: string,
-    top: string,
-    bottom: string,
-    style: string,
-    language: string
+  const { id, uri, top, bottom, style: initialStyle, language: initialLanguage, isNew } = useLocalSearchParams<{ 
+    id: string; 
+    uri: string; 
+    top: string; 
+    bottom: string; 
+    style: string; 
+    language: string;
+    isNew?: string;
   }>();
+  
+  const [shouldAutoSave, setShouldAutoSave] = useState(isNew === 'true');
 
-  const [currentStyle, setCurrentStyle] = useState(style || 'Funny');
-  const [currentLanguage, setCurrentLanguage] = useState(language || 'English');
+  const [currentStyle, setCurrentStyle] = useState(initialStyle || 'Funny');
+  const [currentLanguage, setCurrentLanguage] = useState(initialLanguage || 'English');
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
@@ -60,14 +63,24 @@ export default function ResultScreen() {
   const [isUploadingToCloud, setIsUploadingToCloud] = useState(false);
   const [recentError, setRecentError] = useState<string | null>(null);
 
-  // Automatic Cloud Upload is now DISABLED per user request.
-  // We only save to the bucket/DB when the user clicks "SAVE MEME".
+  // Automatic Cloud Upload: Every generation and reload is synced to the lab.
 
   const autoUploadMeme = async (existingCaptureUri?: string) => {
-    if ((!viewShotRef.current?.capture && !existingCaptureUri) || isUploadingToCloud) return;
+    if ((!viewShotRef.current?.capture && !existingCaptureUri) || isUploadingToCloud || !user) return;
 
     try {
+      // Safety Limit Check: Don't increment if already over limit (unless premium)
+      if (!isPremium) {
+        const count = await getUserMemeCount(user.id);
+        if (count >= 3) {
+          console.log('Auto-upload skipped: Limit reached');
+          setShouldAutoSave(false);
+          return;
+        }
+      }
+
       setIsUploadingToCloud(true);
+      setShouldAutoSave(false); // Mark as handled
       
       // 1. Capture the final rendered meme (image + text) if not provided
       const captureUri = existingCaptureUri || await viewShotRef.current!.capture();
@@ -107,6 +120,16 @@ export default function ResultScreen() {
     }
   };
 
+  useEffect(() => {
+    // Auto-sync to cloud whenever the meme is ready or updated
+    if (isImageLoaded && !isReloading && !isSaving && !isUploadingToCloud && shouldAutoSave) {
+      const timer = setTimeout(() => {
+        autoUploadMeme();
+      }, 1500); // Settle time for text rendering
+      return () => clearTimeout(timer);
+    }
+  }, [isImageLoaded, topLines, bottomLines, isReloading, shouldAutoSave]);
+
 
   // Re-generate AI text for the same image
   const handleReload = async () => {
@@ -137,6 +160,7 @@ export default function ResultScreen() {
       const newLines = await generateMemeLines(uri, currentStyle, currentLanguage);
       setTopLines(newLines.top);
       setBottomLines(newLines.bottom);
+      setShouldAutoSave(true);
 
       // --- SUPABASE SAVE STEP is now handled by the useEffect above ---
       // which triggers when topLines/bottomLines change.
@@ -228,11 +252,13 @@ export default function ResultScreen() {
 
       // 4. Save to media library
       await MediaLibrary.saveToLibraryAsync(captureUri);
-
-      // 5. ALSO Save to Supabase Bucket & DB (per user request)
-      await autoUploadMeme(captureUri);
-
       setHasSaved(true);
+
+      // Auto-upload to lab if not already done (new generations/reloads only)
+      if (shouldAutoSave) {
+        await autoUploadMeme(captureUri);
+      }
+      
       setTimeout(() => setHasSaved(false), 3000);
       
       showAlert({
@@ -260,20 +286,24 @@ export default function ResultScreen() {
           <Home color="#FFF" size={28} />
         </Pressable>
         
-        <View style={styles.dropdowns}>
-          <Pressable onPress={() => setShowStyleModal(true)} style={styles.dropdown}>
-            <Text style={styles.dropdownText}>{currentStyle}</Text>
-            <ChevronDown color={Colors.dark.accent} size={14} />
-          </Pressable>
-          <Pressable onPress={() => setShowLanguageModal(true)} style={styles.dropdown}>
-            <Text style={styles.dropdownText}>{currentLanguage}</Text>
-            <ChevronDown color={Colors.dark.accent} size={14} />
-          </Pressable>
-        </View>
+        {isNew === 'true' && (
+          <View style={styles.dropdowns}>
+            <Pressable onPress={() => setShowStyleModal(true)} style={styles.dropdown}>
+              <Text style={styles.dropdownText}>{currentStyle}</Text>
+              <ChevronDown color={Colors.dark.accent} size={16} />
+            </Pressable>
+            <Pressable onPress={() => setShowLanguageModal(true)} style={styles.dropdown}>
+              <Text style={styles.dropdownText}>{currentLanguage}</Text>
+              <ChevronDown color={Colors.dark.accent} size={16} />
+            </Pressable>
+          </View>
+        )}
 
-        <Pressable onPress={handleReload} disabled={isReloading} style={styles.reloadButton}>
-          <RotateCcw color={isReloading ? Colors.dark.muted : Colors.dark.accent} size={28} />
-        </Pressable>
+        {isNew === 'true' && (
+          <Pressable onPress={handleReload} disabled={isReloading} style={styles.reloadButton}>
+            <RotateCcw color={isReloading ? Colors.dark.muted : Colors.dark.accent} size={28} />
+          </Pressable>
+        )}
       </View>
 
       <View style={styles.content}>
