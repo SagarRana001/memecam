@@ -49,7 +49,6 @@ const BillingContext = createContext<BillingContextType>({
   requestPurchase: async () => { },
   restorePurchases: async () => { },
   refreshSubscriptionStatus: async () => { },
-  // simulateSuccessPurchase: async () => {},
 });
 
 export const BillingProvider = ({ children }: { children: React.ReactNode }) => {
@@ -291,22 +290,6 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
   };
 
 
-  // const simulateSuccessPurchase = async () => {
-  //   console.log('--- SIMULATING SUCCESSFUL PURCHASE ---');
-  //   const mockPurchase: IAP.Purchase = {
-  //     transactionId: `mock_${Date.now()}`,
-  //     productId: 'memecam_premium_monthly',
-  //     purchaseToken: `mock_token_${Math.random()}`,
-  //     transactionReceipt: 'mock_receipt',
-  //     purchaseStateAndroid: 1,
-  //     // @ts-ignore - Minimal fields needed for our sync logic
-  //     transactionDate: Date.now(),
-  //   };
-  //   
-  //   setLoading(true);
-  //   await syncPurchaseWithBackend(mockPurchase);
-  //   setLoading(false);
-  // };
 
   const requestPurchase = async (sku: string) => {
     console.log('IAP: Requesting purchase for:', sku);
@@ -418,7 +401,6 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       requestPurchase,
       restorePurchases,
       refreshSubscriptionStatus,
-      // simulateSuccessPurchase
     }}>
       {children}
     </BillingContext.Provider>

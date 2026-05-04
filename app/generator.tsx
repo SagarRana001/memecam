@@ -34,7 +34,6 @@ export default function GeneratorScreen() {
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [isOverLimit, setIsOverLimit] = useState(false);
   const [checkLoading, setCheckLoading] = useState(true);
-  const [isFlashing, setIsFlashing] = useState(false);
 
   const { user } = useAuth();
   const { isPremium } = useBilling();
@@ -65,7 +64,6 @@ export default function GeneratorScreen() {
       setCapturedImage(null);
       setIsProcessing(false);
       setIsGeneratingAI(false);
-      setIsFlashing(false);
     }, [])
   );
 
@@ -124,23 +122,24 @@ export default function GeneratorScreen() {
 
     try {
       // 1. TRIGGER FEEDBACK IMMEDIATELY
-      setIsFlashing(true);
-      setTimeout(() => setIsFlashing(false), 150);
       setIsProcessing(true); // Show loader immediately so UI doesn't feel stuck
+      console.log('Capture Initiated...');
 
       // 2. CAPTURE
+      if (!cameraRef.current) throw new Error('Camera not ready');
+
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 1.0,
+        quality: 0.8, // Slightly lower for better performance on Android
         base64: false,
-        skipProcessing: true,
+        skipProcessing: Platform.OS === 'android', // Faster on Android
       });
 
-      if (!photo?.uri) {
-        throw new Error('No photo data');
-      }
+      if (!photo) throw new Error('Failed to capture photo');
+      console.log('Capture Successful:', photo.uri);
 
       // Show the still image immediately
       setCapturedImage(photo.uri);
+      console.log('Capture Successful:', photo.uri);
 
       // 3. --- RATE LIMIT CHECK ---
       if (user) {
@@ -164,12 +163,15 @@ export default function GeneratorScreen() {
 
       // --- AI GENERATION STEP ---
       setIsGeneratingAI(true);
+      console.log('Starting AI Brainstorming...');
       const memeLines = await generateMemeLines(processed.uri, style, language);
+      console.log('AI Brainstorming Success:', memeLines);
       setIsGeneratingAI(false);
 
       // --- SUPABASE PREPARATIONS ---
       let memeId = Date.now().toString();
 
+      console.log('Navigating to Result Screen...');
       router.push({
         pathname: '/result',
         params: {
@@ -194,7 +196,6 @@ export default function GeneratorScreen() {
     } finally {
       setIsProcessing(false);
       setIsGeneratingAI(false);
-      setIsFlashing(false);
     }
 
   };
@@ -322,13 +323,6 @@ export default function GeneratorScreen() {
               <Text style={styles.permissionPlaceholderTitle}>CAMERA ACCESS REQUIRED</Text>
               <Text style={styles.permissionPlaceholderSubtitle}>Tap to enable the fire lab lens</Text>
             </Pressable>
-          )}
-
-          {isFlashing && (
-            <Animated.View 
-              entering={FadeIn.duration(100)}
-              style={styles.flashOverlay} 
-            />
           )}
 
           {(isProcessing || isGeneratingAI) && (

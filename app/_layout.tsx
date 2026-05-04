@@ -1,6 +1,6 @@
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
@@ -11,7 +11,6 @@ import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { BillingProvider } from '@/src/context/BillingContext';
 import { AlertProvider } from '@/src/context/AlertContext';
 import { CustomAlert } from '@/src/components/CustomAlert';
-import { useRouter, useSegments, type ErrorBoundaryProps } from 'expo-router';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { AlertTriangle, RotateCcw } from 'lucide-react-native';
@@ -115,9 +114,7 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
-  const { session, loading } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
+  const { loading } = useAuth();
 
   useEffect(() => {
     if (!loading) {
@@ -125,16 +122,26 @@ function RootLayoutNav() {
     }
   }, [loading]);
 
+  if (loading) {
+    return null;
+  }
+
+  return <NavigationContent />;
+}
+
+function NavigationContent() {
+  const { session, loading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
   useEffect(() => {
     if (loading) return;
 
     const inAuthGroup = segments[0] === 'login' || segments[0] === 'terms' || segments[0] === '(auth)' || segments[0] === undefined;
 
     if (!session && !inAuthGroup) {
-      // Redirect to landing if not logged in
       router.replace('/');
     } else if (session && (segments[0] === 'login' || segments[0] === undefined)) {
-      // Redirect to dashboard if logged in and trying to access landing/login
       router.replace('/dashboard');
     }
   }, [session, loading, segments]);

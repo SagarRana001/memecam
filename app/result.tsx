@@ -34,7 +34,7 @@ export default function ResultScreen() {
   const { isPremium } = useBilling();
   const { showAlert } = useAlert();
 
-  const { id, uri, top, bottom, style: initialStyle, language: initialLanguage, isNew } = useLocalSearchParams<{ 
+  const params = useLocalSearchParams<{ 
     id: string; 
     uri: string; 
     top: string; 
@@ -43,6 +43,15 @@ export default function ResultScreen() {
     language: string;
     isNew?: string;
   }>();
+
+  // Safely extract params (handle both string and string[])
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const uri = Array.isArray(params.uri) ? params.uri[0] : params.uri;
+  const top = Array.isArray(params.top) ? params.top[0] : params.top;
+  const bottom = Array.isArray(params.bottom) ? params.bottom[0] : params.bottom;
+  const initialStyle = Array.isArray(params.style) ? params.style[0] : params.style;
+  const initialLanguage = Array.isArray(params.language) ? params.language[0] : params.language;
+  const isNew = Array.isArray(params.isNew) ? params.isNew[0] : params.isNew;
   
   const [shouldAutoSave, setShouldAutoSave] = useState(isNew === 'true');
 
@@ -53,15 +62,32 @@ export default function ResultScreen() {
 
   const viewShotRef = useRef<ViewShot>(null);
 
+  // Safe JSON parsing helper to prevent white screen crashes
+  const safeJsonParse = (str: string | undefined, fallback: string[]) => {
+    if (!str) return fallback;
+    try {
+      const parsed = JSON.parse(str);
+      return Array.isArray(parsed) ? parsed : [String(parsed), ''];
+    } catch (e) {
+      console.error('Failed to parse meme lines:', e);
+      return fallback;
+    }
+  };
+
   // State for dynamic meme text
-  const [topLines, setTopLines] = useState<string[]>(top ? JSON.parse(top) : ['MEME COMES HERE', 'IN 2 LINES']);
-  const [bottomLines, setBottomLines] = useState<string[]>(bottom ? JSON.parse(bottom) : ['AND HERE IN', 'TWO LINES']);
+  const [topLines, setTopLines] = useState<string[]>(safeJsonParse(top, ['MEME COMES HERE', 'IN 2 LINES']));
+  const [bottomLines, setBottomLines] = useState<string[]>(safeJsonParse(bottom, ['AND HERE IN', 'TWO LINES']));
   const [isReloading, setIsReloading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isUploadingToCloud, setIsUploadingToCloud] = useState(false);
   const [recentError, setRecentError] = useState<string | null>(null);
+
+  useEffect(() => {
+    console.log(`--- Result Screen Loaded (ID: ${id}) ---`);
+    if (!uri) console.warn('Warning: Result screen loaded without a valid image URI');
+  }, [id, uri]);
 
   // Automatic Cloud Upload: Every generation and reload is synced to the lab.
 
@@ -312,8 +338,8 @@ export default function ResultScreen() {
           options={{ format: 'jpg', quality: 1.0, result: 'tmpfile' }}
         >
           <Animated.View
-            entering={ZoomIn.duration(600).springify()}
-            style={styles.memeContainer}
+            entering={ZoomIn.duration(600).springify().damping(15)}
+            style={[styles.memeContainer, { opacity: isImageLoaded ? 1 : 0.5 }]}
             collapsable={false}
           >
             <Image
@@ -483,7 +509,7 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#1A1A1B',
+    backgroundColor: '#000',
     position: 'relative',
     elevation: 20,
     shadowColor: Colors.dark.accent,
