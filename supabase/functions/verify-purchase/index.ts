@@ -54,6 +54,29 @@ serve(async (req) => {
     if (isValid) {
       const finalTransactionId = transactionId || purchaseToken;
 
+      // Check if this subscription is already linked to another user
+      const { data: existingSub, error: existingSubError } = await supabaseClient
+        .from("user_subscriptions")
+        .select("user_id")
+        .eq("external_subscription_id", finalTransactionId)
+        .maybeSingle();
+
+      if (existingSubError) {
+        console.error("Error checking existing subscription:", existingSubError);
+        throw existingSubError;
+      }
+
+      if (existingSub && existingSub.user_id !== user.id) {
+        console.warn(`User ${user.id} tried to claim subscription owned by ${existingSub.user_id}`);
+        return new Response(JSON.stringify({ 
+          success: false, 
+          message: "This subscription is already linked to another account." 
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 409,
+        });
+      }
+
       // 2. Update Subscription Table
       const { data: subData, error: subError } = await supabaseClient
         .from("user_subscriptions")

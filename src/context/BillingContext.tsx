@@ -139,7 +139,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     };
   }, []);
 
-  const checkCurrentPurchases = async () => {
+  const checkCurrentPurchases = async (isSilent = true): Promise<boolean> => {
     try {
       const purchases = await getAvailablePurchases();
       console.log('IAP: Available Purchases', purchases);
@@ -167,40 +167,21 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
         (p) => itemSkus.includes(p.productId)
       );
 
-      setIsPremium(hasPremium);
-
       if (!user?.id) return;
 
       // --- SYNC TO SUPABASE ---
       if (hasPremium) {
-        // 1. Update Profile
-        await supabase
-          .from('profiles')
-          .update({ is_subscriber: true })
-          .eq('id', user.id);
-
-        // 2. Ideally Sync user_subscriptions as well if missing
         const activePurchase = purchases.find(p => itemSkus.includes(p.productId));
         if (activePurchase) {
-          const expiryDate = new Date();
-          expiryDate.setMonth(expiryDate.getMonth() + 1); // Approximate for restore
-
-          await supabase
-            .from('user_subscriptions')
-            .upsert({
-              user_id: user.id,
-              status: 'active',
-              product_id: activePurchase.productId,
-              platform: Platform.OS,
-              current_period_end: expiryDate.toISOString(),
-              external_subscription_id: activePurchase.transactionId || activePurchase.purchaseToken,
-            }, { onConflict: 'user_id' });
+          // Sync it securely. It will refresh subscription status internally if successful.
+          const syncSuccess = await syncPurchaseWithBackend(activePurchase, isSilent);
+          return syncSuccess;
         }
-
-        console.log('Premium status restored to Supabase! 🚀');
       }
+      return false;
     } catch (err) {
       console.warn('IAP: Restore/Check Error', err);
+      return false;
     }
   };
 
@@ -243,7 +224,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     refreshSubscriptionStatus();
   }, [refreshSubscriptionStatus]);
 
-  const syncPurchaseWithBackend = async (purchase: Purchase) => {
+  const syncPurchaseWithBackend = async (purchase: Purchase, isSilent = false) => {
     if (!user?.id) return false;
 
     try {
@@ -277,11 +258,13 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       return true;
     } catch (err) {
       console.error('Sync error:', err);
-      showAlert({
-        title: 'Sync Failed',
-        message: 'Payment was successful, but we had trouble updating your account. Please click "Restore Purchases" in the lab.',
-        type: 'warning'
-      });
+      if (!isSilent) {
+        showAlert({
+          title: 'Sync Failed',
+          message: 'This subscription is already linked to another account, or there was a network error.',
+          type: 'warning'
+        });
+      }
       return false;
     }
   };
@@ -362,7 +345,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
   const restorePurchases = async () => {
     try {
       setLoading(true);
-      await checkCurrentPurchases();
+      const wasSuccessful = await checkCurrentPurchases(false);
       await refreshSubscriptionStatus();
 
       if (isPremium) {
@@ -371,12 +354,20 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
           message: 'Welcome back! Your premium subscription has been successfully restored. 🚀',
           type: 'success'
         });
-      } else {
-        showAlert({
-          title: 'No Subscription',
-          message: 'No active premium subscriptions were found for this account.',
-          type: 'info'
-        });
+      } else if (!wasSuccessful) {
+        // If it failed to sync (and already showed an alert), or just no subscription found
+        // checkCurrentPurchases(false) will have shown an alert if it was a sync error.
+        // But if it just returned false because `hasPremium` was false, we show the fallback alert:
+        const purchases = await getAvailablePurchases();
+        const hasAny = purchases.some((p) => itemSkus.includes(p.productId));
+        
+        if (!hasAny) {
+          showAlert({
+            title: 'No Subscription',
+            message: 'No active premium subscriptions were found for this account.',
+            type: 'info'
+          });
+        }
       }
     } catch (err) {
       showAlert({

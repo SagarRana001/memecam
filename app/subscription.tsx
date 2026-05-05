@@ -168,13 +168,7 @@ export default function SubscriptionScreen() {
             </View>
           )}
 
-          <View style={styles.secondaryActions}>
-            <Pressable onPress={restorePurchases}>
-              <Text style={styles.restoreText}>Restore Purchases</Text>
-            </Pressable>
-
-
-          </View>
+          {/* Restore Purchases button removed per request */}
 
           <View style={styles.dangerZone}>
             <Pressable style={styles.iconAction} onPress={handleLogout}>
