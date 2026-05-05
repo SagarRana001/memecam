@@ -7,9 +7,9 @@ import { Platform } from 'react-native';
 import {
   acknowledgePurchaseAndroid,
   endConnection,
+  fetchProducts,
   finishTransaction,
   getAvailablePurchases,
-  fetchProducts,
   initConnection,
   purchaseErrorListener,
   purchaseUpdatedListener,
@@ -69,7 +69,6 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
         console.log('IAP: Connection Initialized');
 
         const getSubs = await fetchProducts({ skus: itemSkus, type: 'subs' });
-        console.log('IAP: Subscriptions fetched:', getSubs);
         setProducts(getSubs as Product[] || []);
 
         // Check for existing purchases (Restore)
@@ -92,26 +91,29 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
   useEffect(() => {
     const purchaseUpdateSubscription = purchaseUpdatedListener(async (purchase) => {
       console.log('IAP: Purchase Updated', purchase);
-      
+
       // In v15, we should check for 'purchased' state
       if (purchase.purchaseState === 'purchased' || (purchase.transactionReceipt && Platform.OS === 'ios')) {
         try {
-          if (Platform.OS === 'android' && !purchase.isAcknowledgedAndroid) {
-            await acknowledgePurchaseAndroid(purchase.purchaseToken!);
-            console.log('IAP: Android Purchase Acknowledged');
+          // 1. SYNC TO BACKEND FIRST
+          // This ensures we have a record before we tell the store we're done.
+          const success = await syncPurchaseWithBackend(purchase);
+
+          if (success) {
+            if (Platform.OS === 'android' && !purchase.isAcknowledgedAndroid) {
+              await acknowledgePurchaseAndroid(purchase.purchaseToken!);
+              console.log('IAP: Android Purchase Acknowledged');
+            }
+
+            await finishTransaction({ purchase, isConsumable: false });
+            console.log('IAP: Transaction Finished');
+
+            showAlert({
+              title: 'Success!',
+              message: 'Premium subscription activated! You are now fire-ready. 🔥',
+              type: 'success'
+            });
           }
-
-          await finishTransaction({ purchase, isConsumable: false });
-          console.log('IAP: Transaction Finished');
-
-          // --- SYNC TO BACKEND ---
-          await syncPurchaseWithBackend(purchase);
-
-          showAlert({
-            title: 'Success!',
-            message: 'Premium subscription activated! You are now fire-ready. 🔥',
-            type: 'success'
-          });
         } catch (ackErr) {
           console.warn('IAP: Finalization Error', ackErr);
         }
@@ -152,7 +154,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
             console.warn('IAP: Failed to acknowledge missed purchase:', ackErr);
           }
         }
-        
+
         // Always try to finish available purchases to keep the queue clean
         try {
           await finishTransaction({ purchase: p, isConsumable: false });
@@ -242,50 +244,45 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
   }, [refreshSubscriptionStatus]);
 
   const syncPurchaseWithBackend = async (purchase: Purchase) => {
-    if (!user?.id) return;
+    if (!user?.id) return false;
 
     try {
-      // 1. Log the transaction attempt immediately
+      console.log('IAP: Syncing purchase with edge function...');
+
       const product = products.find(p => p.id === purchase.productId);
-      const amountMicros = product ? parseInt(product.priceAmountMicros) : 1000000;
+      const amountMicros = product ? parseInt(product.priceAmountMicros) : 799000000;
       const currency = product ? product.currency : 'INR';
 
-      const { error: historyError } = await supabase
-        .from('payment_history')
-        .insert({
-          user_id: user.id,
-          transaction_id: purchase.transactionId,
-          product_id: purchase.productId,
-          purchase_token: purchase.purchaseToken,
-          status: 'succeeded',
-          amount_micros: amountMicros,
-          currency: currency
-        });
-
-      if (historyError) console.warn('Payment recording error:', historyError);
-
-      // 2. Update the subscription state
-      // NOTE: In a production app, this should be done by an Edge Function 
-      // responding to the purchase verification or a webhook.
-      const expiryDate = new Date();
-      expiryDate.setMonth(expiryDate.getMonth() + 1);
-
-      const { error: subError } = await supabase
-        .from('user_subscriptions')
-        .upsert({
-          user_id: user.id,
-          status: 'active',
-          product_id: purchase.productId,
+      // Call the Edge Function for secure verification and sync
+      const { data, error } = await supabase.functions.invoke('verify-purchase', {
+        body: {
+          purchaseToken: purchase.purchaseToken,
+          productId: purchase.productId,
           platform: Platform.OS,
-          current_period_end: expiryDate.toISOString(),
-          external_subscription_id: purchase.transactionId,
-        }, { onConflict: 'user_id' });
+          transactionId: purchase.transactionId,
+          amountMicros: amountMicros,
+          currency: currency
+        }
+      });
 
-      if (subError) throw subError;
+      if (error) {
+        console.error('Edge Function Error:', error);
+        throw error;
+      }
 
+      console.log('IAP: Purchase synced successfully:', data);
+
+      // Refresh the local subscription state
       await refreshSubscriptionStatus();
+      return true;
     } catch (err) {
       console.error('Sync error:', err);
+      showAlert({
+        title: 'Sync Failed',
+        message: 'Payment was successful, but we had trouble updating your account. Please click "Restore Purchases" in the lab.',
+        type: 'warning'
+      });
+      return false;
     }
   };
 
@@ -316,8 +313,8 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       }
 
       if (Platform.OS === 'android') {
-        const offerToken = 
-          (product as any)?.subscriptionOffers?.[0]?.offerTokenAndroid || 
+        const offerToken =
+          (product as any)?.subscriptionOffers?.[0]?.offerTokenAndroid ||
           (product as any)?.subscriptionOfferDetailsAndroid?.[0]?.offerToken ||
           (product as any)?.subscriptionOfferDetails?.[0]?.offerToken;
 

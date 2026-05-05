@@ -20,7 +20,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.aadmi.memecam",
-      "versionCode": 3,
+      "versionCode": 4,
       "permissions": [
         "com.android.vending.BILLING",
         "android.permission.READ_EXTERNAL_STORAGE",

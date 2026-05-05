@@ -28,31 +28,34 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { purchaseToken, productId, platform } = await req.json();
+    const body = await req.json();
+    const { 
+      purchaseToken, 
+      productId, 
+      platform, 
+      transactionId, 
+      amountMicros, 
+      currency 
+    } = body;
 
     // 1. Get User ID from Auth header
     const authHeader = req.headers.get("Authorization")!;
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authError || !user) throw new Error("Unauthorized");
 
-    console.log(`Verifying ${platform} purchase for user ${user.id}...`);
+    console.log(`[Verify] Platform: ${platform}, User: ${user.id}, Product: ${productId}`);
 
-    let isValid = false;
-    let expiryTimeMillis = 0;
-
-    if (platform === "android") {
-      // --- GOOGLE PLAY VERIFICATION LOGIC ---
-      // In a real implementation, you would use 'googleapis' or a fetch request 
-      // to Google's Android Publisher API here.
-      // Example URL: https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{packageName}/purchases/subscriptions/{subscriptionId}/tokens/{token}
-      
-      isValid = true; // Placeholder: Replace with actual Google API call
-      expiryTimeMillis = Date.now() + (30 * 24 * 60 * 60 * 1000); // +30 days
-    }
+    // --- PURCHASE VERIFICATION ---
+    // In a production app, you MUST verify the token with Google/Apple API here.
+    // For now, we assume the token is valid if the client passed it after a successful IAP flow.
+    let isValid = !!purchaseToken;
+    let expiryTimeMillis = Date.now() + (31 * 24 * 60 * 60 * 1000); // Default +31 days
 
     if (isValid) {
+      const finalTransactionId = transactionId || purchaseToken;
+
       // 2. Update Subscription Table
-      const { error: subError } = await supabaseClient
+      const { data: subData, error: subError } = await supabaseClient
         .from("user_subscriptions")
         .upsert({
           user_id: user.id,
@@ -60,24 +63,40 @@ serve(async (req) => {
           product_id: productId,
           platform: platform,
           current_period_end: new Date(expiryTimeMillis).toISOString(),
-          external_subscription_id: purchaseToken.substring(0, 50), // Use sub ID in real app
-        }, { onConflict: "user_id" });
+          external_subscription_id: finalTransactionId,
+        }, { onConflict: "user_id" })
+        .select()
+        .single();
 
-      if (subError) throw subError;
+      if (subError) {
+        console.error("Subscription Upsert Error:", subError);
+        throw subError;
+      }
 
       // 3. Log Payment History
-      await supabaseClient.from("payment_history").insert({
-        user_id: user.id,
-        transaction_id: `verified_${Date.now()}`,
-        product_id: productId,
-        purchase_token: purchaseToken,
-        status: "succeeded",
-        amount_micros: 799000000,
-        currency: "INR",
-        raw_payload: { verified_at: new Date().toISOString() }
-      });
+      const { error: historyError } = await supabaseClient
+        .from("payment_history")
+        .insert({
+          user_id: user.id,
+          subscription_id: subData?.id,
+          transaction_id: finalTransactionId,
+          product_id: productId,
+          purchase_token: purchaseToken,
+          status: "succeeded",
+          amount_micros: amountMicros || 799000000,
+          currency: currency || "INR",
+          raw_payload: { ...body, verified_at: new Date().toISOString() }
+        });
 
-      return new Response(JSON.stringify({ success: true }), {
+      if (historyError) {
+        // If it's a unique constraint violation on transaction_id, it means we already logged it.
+        // We can ignore that, but log other errors.
+        if (historyError.code !== '23505') {
+           console.warn("Payment History Insert Error:", historyError);
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true, subscription: subData }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
@@ -89,6 +108,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
+    console.error("[Verify Error]", error);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
