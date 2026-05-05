@@ -1,4 +1,4 @@
-# Design System: MemeGen AI (MemeCam)
+# Design System: Memecam.in
 
 ## 1. Visual Theme & Atmosphere
 A high-energy, high-contrast "Dark Mode" interface designed to make content pop. The atmosphere is "Premium Midnight" — using deep charcoal bases, vibrant neon green accents, and fluid 60fps animations. The layout is asymmetric and bold, mirrors the chaotic energy of meme culture while maintaining professional UI polish.
@@ -15,7 +15,7 @@ A high-energy, high-contrast "Dark Mode" interface designed to make content pop.
 ## 3. Typography Rules
 - **Display**: `Outfit` or `Cabinet Grotesk` — Bold, track-tight (-0.02em), uppercase for headlines ("MAKE ANY MOMENT FIRE").
 - **Body**: `Satoshi` — Clean, high-legibility sans-serif for descriptions and labels.
-- **Mono**: `JetBrains Mono` — For metadata (e.g., "MemeGen.ai" watermark) and system info.
+- **Mono**: `JetBrains Mono` — For metadata (e.g., "Memecam.in" watermark) and system info.
 - **Banned**: Inter, generic system fonts. No serif fonts in this high-tech context.
 
 ## 4. Component Stylings

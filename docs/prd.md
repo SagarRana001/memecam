@@ -1,4 +1,4 @@
-# Product Requirements Document (PRD): MemeGen AI
+# Product Requirements Document (PRD): Memecam.in
 
 ## 1. Product Vision
 To become the fastest, most intuitive tool for generating viral memes from personal photos using state-of-the-art AI.

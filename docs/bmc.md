@@ -1,4 +1,4 @@
-# Business Model Canvas (BMC): MemeGen AI
+# Business Model Canvas (BMC): Memecam.in
 
 ## Left Side: Creating Value
 

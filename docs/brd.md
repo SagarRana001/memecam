@@ -1,7 +1,7 @@
-# Business Requirements Document (BRD): MemeGen AI
+# Business Requirements Document (BRD): Memecam.in
 
 ## 1. Executive Summary
-The MemeGen AI project aims to provide a fast, AI-powered meme generation experience leveraging Google's Gemini AI. The service follows a freemium model to drive user acquisition while offering a premium subscription for power users.
+The Memecam.in project aims to provide a fast, AI-powered meme generation experience leveraging Google's Gemini AI. The service follows a freemium model to drive user acquisition while offering a premium subscription for power users.
 
 ## 2. Business Objectives
 - **User Growth**: Achieve high virality through easy "Share" functionality.

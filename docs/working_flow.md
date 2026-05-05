@@ -1,6 +1,6 @@
-# Working Flow: MemeGen AI
+# Working Flow: Memecam.in
 
-This document details the step-by-step logic flow of the MemeGen AI application, formalizing the **Action Diagram**.
+This document details the step-by-step logic flow of the Memecam.in application, formalizing the **Action Diagram**.
 
 ## 1. High-Level User Journey (Mermaid)
 
@@ -58,7 +58,7 @@ graph TD
 
 ### 2.4 Output Processing
 - **Font**: Use a high-contrast meme font (e.g., Impact or Montserrat Bold).
-- **Watermark**: Fixed text "MemeGen.ai" at the bottom right corner (50% opacity).
+- **Watermark**: Fixed text "Memecam.in" at the bottom right corner (50% opacity).
 - **Positioning**: Top/Bottom text overlay based on caption length.
 
 ### 2.5 Subscription & Billing

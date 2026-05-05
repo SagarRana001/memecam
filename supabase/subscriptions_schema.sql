@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS public.user_subscriptions (
     status subscription_status NOT NULL DEFAULT 'unpaid',
     
     -- Product Info
-    product_id TEXT NOT NULL, -- e.g., 'memecam_premium_monthly'
+    product_id TEXT NOT NULL, -- e.g., 'monthly-plan'
     platform TEXT NOT NULL CHECK (platform IN ('android', 'ios', 'stripe')),
     
     -- Lifecycle Dates
