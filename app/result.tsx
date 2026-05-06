@@ -20,13 +20,14 @@ import { useAlert } from '@/src/context/AlertContext';
 
 import { ChevronDown } from 'lucide-react-native';
 import { useEffect } from 'react';
+import { getLanguages, addLanguageToDb } from '@/src/services/languageService';
+import storage from '@/src/utils/storage';
 
 
 
 const { width } = Dimensions.get('window');
 
 const STYLES = ['Funny', 'Dark', 'Roast', 'Cute'];
-const LANGUAGES = ['English', 'Hindi', 'Hinglish', 'Tamil', 'Telugu'];
 
 export default function ResultScreen() {
   const router = useRouter();
@@ -57,6 +58,7 @@ export default function ResultScreen() {
 
   const [currentStyle, setCurrentStyle] = useState(initialStyle || 'Funny');
   const [currentLanguage, setCurrentLanguage] = useState(initialLanguage || 'English');
+  const [languagesList, setLanguagesList] = useState<string[]>([]);
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
@@ -87,7 +89,33 @@ export default function ResultScreen() {
   useEffect(() => {
     console.log(`--- Result Screen Loaded (ID: ${id}) ---`);
     if (!uri) console.warn('Warning: Result screen loaded without a valid image URI');
+    
+    // Fetch global languages
+    getLanguages().then(setLanguagesList);
   }, [id, uri]);
+
+  const handleLanguageSelect = (lang: string) => {
+    setCurrentLanguage(lang);
+    storage.setItem('preferred_language', lang);
+  };
+
+  const handleStyleSelect = (style: string) => {
+    setCurrentStyle(style);
+    storage.setItem('preferred_style', style);
+  };
+
+  const handleAddLanguage = async (newLang: string) => {
+    if (!newLang) return;
+    // Optimistic update
+    if (!languagesList.includes(newLang)) {
+      setLanguagesList(prev => [...prev, newLang]);
+    }
+    handleLanguageSelect(newLang);
+    setShowLanguageModal(false);
+    
+    // Save to DB
+    await addLanguageToDb(newLang);
+  };
 
   // Automatic Cloud Upload: Every generation and reload is synced to the lab.
 
@@ -435,17 +463,20 @@ export default function ResultScreen() {
         onClose={() => setShowStyleModal(false)}
         options={STYLES}
         selected={currentStyle}
-        onSelect={setCurrentStyle}
+        onSelect={handleStyleSelect}
         title="SELECT STYLE"
       />
 
       <SelectionModal 
         visible={showLanguageModal} 
         onClose={() => setShowLanguageModal(false)}
-        options={LANGUAGES}
+        options={languagesList}
         selected={currentLanguage}
-        onSelect={setCurrentLanguage}
+        onSelect={handleLanguageSelect}
         title="SELECT LANGUAGE"
+        allowAdd={true}
+        onAdd={handleAddLanguage}
+        addPlaceholder="Add custom language..."
       />
     </SafeAreaView>
   );

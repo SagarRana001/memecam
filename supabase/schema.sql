@@ -90,3 +90,26 @@ CREATE POLICY "Users can delete their own memes" ON storage.objects
     bucket_id = 'memes' AND 
     auth.uid()::text = (storage.foldername(name))[1]
   );
+
+-- Create a table for global custom languages
+CREATE TABLE public.app_languages (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable Row Level Security
+ALTER TABLE public.app_languages ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for languages
+CREATE POLICY "Public languages are viewable by everyone." ON public.app_languages
+  FOR SELECT USING (true);
+
+CREATE POLICY "Authenticated users can insert languages." ON public.app_languages
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+-- Insert default languages
+INSERT INTO public.app_languages (name) VALUES 
+('English'), ('Hindi'), ('Hinglish'), ('Tamil'), ('Telugu')
+ON CONFLICT (name) DO NOTHING;
+

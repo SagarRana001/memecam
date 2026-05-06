@@ -6,6 +6,8 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useBilling } from '@/src/context/BillingContext';
 import { generateMemeLines } from '@/src/services/aiService';
 import { getUserMemeCount } from '@/src/services/memeService';
+import { getLanguages, addLanguageToDb } from '@/src/services/languageService';
+import storage from '@/src/utils/storage';
 import { processMemeImage } from '@/src/utils/imageProcessor';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -40,7 +42,7 @@ export default function GeneratorScreen() {
 
 
   const STYLES = ['Funny', 'Dark', 'Roast', 'Cute'];
-  const LANGUAGES = ['English', 'Hindi', 'Hinglish', 'Tamil', 'Telugu'];
+  const [languagesList, setLanguagesList] = useState<string[]>([]);
 
   const checkLimit = useCallback(async () => {
     if (!user) return;
@@ -57,6 +59,46 @@ export default function GeneratorScreen() {
   useEffect(() => {
     checkLimit();
   }, [checkLimit]);
+
+  useEffect(() => {
+    const loadPreferencesAndLanguages = async () => {
+      // Load local preferences
+      const savedLang = await storage.getItem('preferred_language');
+      if (savedLang) setLanguage(savedLang);
+      
+      const savedStyle = await storage.getItem('preferred_style');
+      if (savedStyle) setStyle(savedStyle);
+
+      // Fetch global languages
+      const fetchedLangs = await getLanguages();
+      setLanguagesList(fetchedLangs);
+    };
+    
+    loadPreferencesAndLanguages();
+  }, []);
+
+  const handleLanguageSelect = (lang: string) => {
+    setLanguage(lang);
+    storage.setItem('preferred_language', lang);
+  };
+
+  const handleStyleSelect = (selectedStyle: string) => {
+    setStyle(selectedStyle);
+    storage.setItem('preferred_style', selectedStyle);
+  };
+
+  const handleAddLanguage = async (newLang: string) => {
+    if (!newLang) return;
+    // Optimistic update
+    if (!languagesList.includes(newLang)) {
+      setLanguagesList(prev => [...prev, newLang]);
+    }
+    handleLanguageSelect(newLang);
+    setShowLanguageModal(false);
+    
+    // Save to DB
+    await addLanguageToDb(newLang);
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -172,7 +214,8 @@ export default function GeneratorScreen() {
       let memeId = Date.now().toString();
 
       console.log('Navigating to Result Screen...');
-      router.push({
+      setCapturedImage(null); // Clear memory before navigation
+      router.replace({
         pathname: '/result',
         params: {
           id: memeId,
@@ -247,7 +290,8 @@ export default function GeneratorScreen() {
         // --- SUPABASE PREPARATIONS ---
         let memeId = Date.now().toString();
 
-        router.push({
+        setCapturedImage(null); // Clear memory before navigation
+        router.replace({
           pathname: '/result',
           params: {
             id: memeId,
@@ -380,17 +424,20 @@ export default function GeneratorScreen() {
         onClose={() => setShowStyleModal(false)}
         options={STYLES}
         selected={style}
-        onSelect={setStyle}
+        onSelect={handleStyleSelect}
         title="Enter Style"
       />
 
       <SelectionModal
         visible={showLanguageModal}
         onClose={() => setShowLanguageModal(false)}
-        options={LANGUAGES}
+        options={languagesList}
         selected={language}
-        onSelect={setLanguage}
+        onSelect={handleLanguageSelect}
         title="Enter Language"
+        allowAdd={true}
+        onAdd={handleAddLanguage}
+        addPlaceholder="Add custom language..."
       />
     </SafeAreaView>
   );
