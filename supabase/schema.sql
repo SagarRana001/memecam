@@ -113,3 +113,25 @@ INSERT INTO public.app_languages (name) VALUES
 ('English'), ('Hindi'), ('Hinglish'), ('Tamil'), ('Telugu')
 ON CONFLICT (name) DO NOTHING;
 
+-- Create a table for global custom styles
+CREATE TABLE public.app_styles (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable Row Level Security
+ALTER TABLE public.app_styles ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for styles
+CREATE POLICY "Public styles are viewable by everyone." ON public.app_styles
+  FOR SELECT USING (true);
+
+CREATE POLICY "Authenticated users can insert styles." ON public.app_styles
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+-- Insert default styles
+INSERT INTO public.app_styles (name) VALUES 
+('Funny'), ('Dark'), ('Roast'), ('Cute')
+ON CONFLICT (name) DO NOTHING;
+

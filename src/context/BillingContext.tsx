@@ -177,6 +177,10 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
           const syncSuccess = await syncPurchaseWithBackend(activePurchase, isSilent);
           return syncSuccess;
         }
+      } else {
+        // If they have no active premium purchases from the store, but they are logged in,
+        // we should ensure they aren't incorrectly marked as active in Supabase if their time passed.
+        await refreshSubscriptionStatus();
       }
       return false;
     } catch (err) {
@@ -209,7 +213,15 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
 
       if (profileError && profileError.code !== 'PGRST116') throw profileError;
 
-      const hasActiveStoreSub = subData && ['active', 'trialing'].includes(subData.status);
+      let hasActiveStoreSub = false;
+      if (subData && ['active', 'trialing'].includes(subData.status)) {
+        if (subData.current_period_end) {
+          const isExpired = new Date(subData.current_period_end).getTime() < Date.now();
+          hasActiveStoreSub = !isExpired;
+        } else {
+          hasActiveStoreSub = true;
+        }
+      }
       const hasManualSub = profileData?.is_subscriber === true;
 
       if (subData) setSubscription(subData as UserSubscription);
@@ -242,7 +254,8 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
           platform: Platform.OS,
           transactionId: purchase.transactionId,
           amountMicros: amountMicros,
-          currency: currency
+          currency: currency,
+          transactionDate: purchase.transactionDate
         }
       });
 

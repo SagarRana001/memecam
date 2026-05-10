@@ -82,7 +82,7 @@ export default function ResultScreen() {
   const [isReloading, setIsReloading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
-  const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [isImageLoaded, setIsImageLoaded] = useState(true);
   const [isUploadingToCloud, setIsUploadingToCloud] = useState(false);
   const [recentError, setRecentError] = useState<string | null>(null);
 
@@ -367,7 +367,7 @@ export default function ResultScreen() {
         >
           <Animated.View
             entering={ZoomIn.duration(600).springify().damping(15)}
-            style={[styles.memeContainer, { opacity: isImageLoaded ? 1 : 0.5 }]}
+            style={styles.memeContainer}
             collapsable={false}
           >
             <Image

@@ -35,7 +35,8 @@ serve(async (req) => {
       platform, 
       transactionId, 
       amountMicros, 
-      currency 
+      currency,
+      transactionDate 
     } = body;
 
     // 1. Get User ID from Auth header
@@ -49,7 +50,14 @@ serve(async (req) => {
     // In a production app, you MUST verify the token with Google/Apple API here.
     // For now, we assume the token is valid if the client passed it after a successful IAP flow.
     let isValid = !!purchaseToken;
-    let expiryTimeMillis = Date.now() + (31 * 24 * 60 * 60 * 1000); // Default +31 days
+    
+    // Anchor the expiration to the actual transaction date, so it doesn't infinitely extend.
+    const baseTime = transactionDate ? Number(transactionDate) : Date.now();
+    
+    // Calculate expiration "month-wise" (exactly 1 calendar month from the payment date)
+    const expiryDate = new Date(baseTime);
+    expiryDate.setMonth(expiryDate.getMonth() + 1);
+    let expiryTimeMillis = expiryDate.getTime();
 
     if (isValid) {
       const finalTransactionId = transactionId || purchaseToken;

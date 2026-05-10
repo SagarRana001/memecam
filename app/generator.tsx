@@ -7,6 +7,7 @@ import { useBilling } from '@/src/context/BillingContext';
 import { generateMemeLines } from '@/src/services/aiService';
 import { getUserMemeCount } from '@/src/services/memeService';
 import { getLanguages, addLanguageToDb } from '@/src/services/languageService';
+import { getStyles, addStyleToDb } from '@/src/services/styleService';
 import storage from '@/src/utils/storage';
 import { processMemeImage } from '@/src/utils/imageProcessor';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -41,7 +42,7 @@ export default function GeneratorScreen() {
   const { isPremium } = useBilling();
 
 
-  const STYLES = ['Funny', 'Dark', 'Roast', 'Cute'];
+  const [stylesList, setStylesList] = useState<string[]>(['Funny', 'Dark', 'Roast', 'Cute']);
   const [languagesList, setLanguagesList] = useState<string[]>([]);
 
   const checkLimit = useCallback(async () => {
@@ -72,6 +73,10 @@ export default function GeneratorScreen() {
       // Fetch global languages
       const fetchedLangs = await getLanguages();
       setLanguagesList(fetchedLangs);
+
+      // Fetch global styles
+      const fetchedStyles = await getStyles();
+      setStylesList(fetchedStyles);
     };
     
     loadPreferencesAndLanguages();
@@ -98,6 +103,19 @@ export default function GeneratorScreen() {
     
     // Save to DB
     await addLanguageToDb(newLang);
+  };
+
+  const handleAddStyle = async (newStyle: string) => {
+    if (!newStyle) return;
+    // Optimistic update
+    if (!stylesList.includes(newStyle)) {
+      setStylesList(prev => [...prev, newStyle]);
+    }
+    handleStyleSelect(newStyle);
+    setShowStyleModal(false);
+    
+    // Save to DB
+    await addStyleToDb(newStyle);
   };
 
   useFocusEffect(
@@ -422,10 +440,13 @@ export default function GeneratorScreen() {
       <SelectionModal
         visible={showStyleModal}
         onClose={() => setShowStyleModal(false)}
-        options={STYLES}
+        options={stylesList}
         selected={style}
         onSelect={handleStyleSelect}
         title="Enter Style"
+        allowAdd={true}
+        onAdd={handleAddStyle}
+        addPlaceholder="Add custom style..."
       />
 
       <SelectionModal
