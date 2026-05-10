@@ -81,7 +81,7 @@ export const uploadMemeImage = async (uri: string, userId: string): Promise<stri
 
     return publicUrl;
   } catch (error: any) {
-    console.error('Upload Error Details:', error);
+    // Upload Error Details
     // Return a more descriptive error message to the UI
     const msg = error.message || 'Check your Supabase project bucket and RLS policies.';
     throw new Error(`Cloud Upload Failed: ${msg}`);
@@ -141,7 +141,7 @@ export const getUserProfile = async (userId: string) => {
       .single();
     
     if (updateError) {
-      console.warn('Silent reset failure:', updateError);
+      // Silent reset failure
       return data; // Return old data if reset fails, to avoid blocking user
     }
     return updatedData;
@@ -181,7 +181,7 @@ export const getUserMemeCount = async (userId: string): Promise<number> => {
     if (profile.is_subscriber) return 0;
     return profile.memes_generated_today || 0;
   } catch (error) {
-    console.error('Failed to fetch profile count:', error);
+    // Failed to fetch profile count
     return 0;
   }
 };
@@ -201,7 +201,7 @@ export const getRemainingMemesCount = async (userId: string): Promise<{ remainin
       isPremium: false 
     };
   } catch (error) {
-    console.error('Failed to get remaining count:', error);
+    // Failed to get remaining count
     return { remaining: 0, total: 3, isPremium: false };
   }
 };

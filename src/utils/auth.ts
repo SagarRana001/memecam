@@ -38,15 +38,15 @@ export const signInWithGoogle = async () => {
   } catch (error: any) {
     if (error.code === statusCodes.SIGN_IN_CANCELLED) {
       // User cancelled the login flow - no alert needed
-      console.log('Login cancelled');
+      // User cancelled the login flow - no alert needed
     } else if (error.code === statusCodes.IN_PROGRESS) {
       // Operation (e.g. sign in) is in progress already
-      console.log('Login in progress');
+      // Operation (e.g. sign in) is in progress already
     } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
       Alert.alert('Play Services', 'Play services not available or outdated');
     } else {
       Alert.alert('Login Error', error.message || 'An error occurred during Google Sign-in');
-      console.error('Google Sign-in Error Detail:', error);
+      // Google Sign-in Error Detail occurred
     }
     throw error;
   }

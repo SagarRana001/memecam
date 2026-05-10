@@ -51,7 +51,7 @@ export const processMemeImage = async (uri: string): Promise<ProcessedImage> => 
       height: processed.height,
     };
   } catch (error) {
-    console.error('Error processing image:', error);
+    // Error processing image
     throw new Error('Failed to process image for meme generation.');
   }
 };

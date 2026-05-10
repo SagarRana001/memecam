@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, View, Text, Pressable, FlatList, StyleSheet, Platform, TextInput, KeyboardAvoidingView } from 'react-native';
+import { Modal, View, Text, Pressable, FlatList, StyleSheet, Platform, TextInput, KeyboardAvoidingView, Alert } from 'react-native';
 import { X, Plus } from 'lucide-react-native';
 import { Colors } from '@/constants/theme';
 
@@ -15,13 +15,39 @@ interface SelectionModalProps {
   addPlaceholder?: string;
 }
 
-export function SelectionModal({ visible, onClose, options, selected, onSelect, title, allowAdd, onAdd, addPlaceholder = 'Add new...' }: SelectionModalProps) {
-  const [newValue, setNewValue] = useState('');
+export function SelectionModal({ visible, onClose, options, selected, onSelect, title, allowAdd, onAdd, addPlaceholder = 'Search or add new...' }: SelectionModalProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredOptions = options.filter(option => 
+    option.toLowerCase().includes(searchQuery.toLowerCase().trim())
+  );
 
   const handleAdd = () => {
-    if (newValue.trim() && onAdd) {
-      onAdd(newValue.trim());
-      setNewValue('');
+    const trimmedValue = searchQuery.trim();
+    if (trimmedValue && onAdd) {
+      // Check if exact match already exists
+      const existingMatch = options.find(o => o.toLowerCase() === trimmedValue.toLowerCase());
+      if (existingMatch) {
+        onSelect(existingMatch);
+        setSearchQuery('');
+        onClose();
+        return;
+      }
+
+      Alert.alert(
+        `Add New ${title}`,
+        `Do you want to add "${trimmedValue}"?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Add', 
+            onPress: () => {
+              onAdd(trimmedValue);
+              setSearchQuery('');
+            }
+          }
+        ]
+      );
     }
   };
 
@@ -40,29 +66,31 @@ export function SelectionModal({ visible, onClose, options, selected, onSelect, 
               </Pressable>
             </View>
             
-            {allowAdd && (
+            {(allowAdd || options.length > 5) && (
               <View style={styles.addInputContainer}>
                 <TextInput
                   style={styles.addInput}
-                  placeholder={addPlaceholder}
+                  placeholder={allowAdd ? addPlaceholder : 'Search...'}
                   placeholderTextColor="#A1A1AA"
-                  value={newValue}
-                  onChangeText={setNewValue}
-                  onSubmitEditing={handleAdd}
-                  returnKeyType="done"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onSubmitEditing={allowAdd ? handleAdd : undefined}
+                  returnKeyType={allowAdd ? "done" : "search"}
                 />
-                <Pressable 
-                  style={[styles.addButton, !newValue.trim() && styles.addButtonDisabled]} 
-                  onPress={handleAdd}
-                  disabled={!newValue.trim()}
-                >
-                  <Plus color={newValue.trim() ? '#000' : '#A1A1AA'} size={20} />
-                </Pressable>
+                {allowAdd && (
+                  <Pressable 
+                    style={[styles.addButton, !searchQuery.trim() && styles.addButtonDisabled]} 
+                    onPress={handleAdd}
+                    disabled={!searchQuery.trim()}
+                  >
+                    <Plus color={searchQuery.trim() ? '#000' : '#A1A1AA'} size={20} />
+                  </Pressable>
+                )}
               </View>
             )}
 
             <FlatList 
-              data={options}
+              data={filteredOptions}
               keyExtractor={(item) => item}
               keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => (

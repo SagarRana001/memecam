@@ -17,7 +17,9 @@ export const deleteUserAccount = async (userId: string): Promise<void> => {
       .delete()
       .eq('user_id', userId);
     
-    if (memesError) console.warn('Error deleting memes:', memesError.message);
+    if (memesError) {
+      // Error deleting memes
+    }
 
     // 2. Delete payment history
     const { error: paymentsError } = await supabase
@@ -25,7 +27,9 @@ export const deleteUserAccount = async (userId: string): Promise<void> => {
       .delete()
       .eq('user_id', userId);
 
-    if (paymentsError) console.warn('Error deleting payment history:', paymentsError.message);
+    if (paymentsError) {
+      // Error deleting payment history
+    }
 
     // 3. Delete subscriptions
     const { error: subError } = await supabase
@@ -33,7 +37,9 @@ export const deleteUserAccount = async (userId: string): Promise<void> => {
       .delete()
       .eq('user_id', userId);
 
-    if (subError) console.warn('Error deleting subscriptions:', subError.message);
+    if (subError) {
+      // Error deleting subscriptions
+    }
 
     // 4. Finally delete the profile
     const { error: profileError } = await supabase
@@ -43,9 +49,9 @@ export const deleteUserAccount = async (userId: string): Promise<void> => {
 
     if (profileError) throw profileError;
 
-    console.log('User account data successfully wiped! 🗑️');
+    // User account data successfully wiped! 🗑️
   } catch (error: any) {
-    console.error('Account deletion failed:', error);
+    // Account deletion failed
     throw new Error(`Deletion Failed: ${error.message || 'Unknown error'}`);
   }
 };

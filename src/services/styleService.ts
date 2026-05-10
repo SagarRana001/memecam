@@ -14,7 +14,7 @@ export const getStyles = async (): Promise<string[]> => {
       .order('name');
       
     if (error) {
-      console.warn('Failed to fetch styles from DB', error);
+      // Return default styles on error
       return DEFAULT_STYLES;
     }
     
@@ -24,7 +24,7 @@ export const getStyles = async (): Promise<string[]> => {
     
     return data.map(item => item.name);
   } catch (err) {
-    console.warn('Error fetching styles', err);
+    // Error fetching styles
     return DEFAULT_STYLES;
   }
 };
@@ -45,7 +45,7 @@ export const addStyleToDb = async (name: string): Promise<boolean> => {
     }
     return true;
   } catch (err) {
-    console.error('Failed to add style', err);
+    // Failed to add style
     return false;
   }
 };

@@ -69,7 +69,7 @@ export const saveMemeToHistory = async (
     
     return newMeme;
   } catch (error) {
-    console.error('Failed to save meme to history:', error);
+    // Failed to save meme to history
     throw new Error('Storage Error: Could not save meme permanently.');
   }
 };
@@ -82,7 +82,7 @@ export const getMemeHistory = async (): Promise<MemeItem[]> => {
     const data = await storage.getItem(HISTORY_KEY);
     return data ? JSON.parse(data) : [];
   } catch (error) {
-    console.error('Failed to retrieve history:', error);
+    // Failed to retrieve history
     return [];
   }
 };
@@ -107,7 +107,7 @@ export const deleteMemeFromHistory = async (id: string) => {
       await storage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
     }
   } catch (error) {
-    console.error('Failed to delete meme:', error);
+    // Failed to delete meme
   }
 };
 /**
@@ -123,6 +123,6 @@ export const updateMemeInHistory = async (id: string, updates: Partial<MemeItem>
       await storage.setItem(HISTORY_KEY, JSON.stringify(history));
     }
   } catch (error) {
-    console.error('Failed to update meme history:', error);
+    // Failed to update meme history
   }
 };

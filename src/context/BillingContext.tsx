@@ -65,8 +65,6 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     const initIAP = async () => {
       try {
         await initConnection();
-        console.log("initConnection")
-        console.log('IAP: Connection Initialized');
 
         const getSubs = await fetchProducts({ skus: itemSkus, type: 'subs' });
         setProducts(getSubs as Product[] || []);
@@ -74,7 +72,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
         // Check for existing purchases (Restore)
         await checkCurrentPurchases();
       } catch (err) {
-        console.warn('IAP: Initialization Error', err);
+        // Initialization error handled silently or via state
       } finally {
         setLoading(false);
       }
@@ -90,7 +88,6 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
   // 2. Setup purchase listeners
   useEffect(() => {
     const purchaseUpdateSubscription = purchaseUpdatedListener(async (purchase) => {
-      console.log('IAP: Purchase Updated', purchase);
 
       // In v15, we should check for 'purchased' state
       if (purchase.purchaseState === 'purchased' || (purchase.transactionReceipt && Platform.OS === 'ios')) {
@@ -102,11 +99,9 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
           if (success) {
             if (Platform.OS === 'android' && !purchase.isAcknowledgedAndroid) {
               await acknowledgePurchaseAndroid(purchase.purchaseToken!);
-              console.log('IAP: Android Purchase Acknowledged');
             }
 
             await finishTransaction({ purchase, isConsumable: false });
-            console.log('IAP: Transaction Finished');
 
             showAlert({
               title: 'Success!',
@@ -115,15 +110,13 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
             });
           }
         } catch (ackErr) {
-          console.warn('IAP: Finalization Error', ackErr);
+          // Transaction finalization failed
         }
       } else if (purchase.purchaseState === 'pending') {
-        console.log('IAP: Purchase is pending...');
       }
     });
 
     const purchaseErrorSubscription = purchaseErrorListener((error) => {
-      console.warn('IAP: Purchase Error', error);
       if (error.code !== 'E_USER_CANCELLED' && error.code !== 'USER_CANCELED') {
         showAlert({
           title: 'Purchase Error',
@@ -142,16 +135,14 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
   const checkCurrentPurchases = async (isSilent = true): Promise<boolean> => {
     try {
       const purchases = await getAvailablePurchases();
-      console.log('IAP: Available Purchases', purchases);
 
       // Handle unacknowledged purchases on Android
       for (const p of purchases) {
         if (Platform.OS === 'android' && !p.isAcknowledgedAndroid) {
           try {
             await acknowledgePurchaseAndroid(p.purchaseToken!);
-            console.log('IAP: Acknowledged missed purchase:', p.productId);
           } catch (ackErr) {
-            console.warn('IAP: Failed to acknowledge missed purchase:', ackErr);
+            // Failed to acknowledge missed purchase
           }
         }
 
@@ -184,7 +175,6 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       }
       return false;
     } catch (err) {
-      console.warn('IAP: Restore/Check Error', err);
       return false;
     }
   };
@@ -228,7 +218,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       setIsPremium(!!(hasActiveStoreSub || hasManualSub));
 
     } catch (err) {
-      console.error('Error refreshing subscription:', err);
+      // Error refreshing subscription state
     }
   }, [user?.id]);
 
@@ -240,7 +230,6 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     if (!user?.id) return false;
 
     try {
-      console.log('IAP: Syncing purchase with edge function...');
 
       const product = products.find(p => p.id === purchase.productId);
       const amountMicros = product ? parseInt(product.priceAmountMicros) : 799000000;
@@ -260,17 +249,18 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       });
 
       if (error) {
-        console.error('Edge Function Error:', error);
         throw error;
       }
 
-      console.log('IAP: Purchase synced successfully:', data);
+      if (data) {
+        // Purchase synced successfully
+      }
 
       // Refresh the local subscription state
       await refreshSubscriptionStatus();
       return true;
     } catch (err) {
-      console.error('Sync error:', err);
+      // Sync error handled via alert in UI flow
       if (!isSilent) {
         showAlert({
           title: 'Sync Failed',
@@ -285,7 +275,6 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
 
 
   const requestPurchase = async (sku: string) => {
-    console.log('IAP: Requesting purchase for:', sku);
     try {
       setLoading(true);
 
@@ -323,7 +312,6 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
           return;
         }
 
-        console.log('IAP: Starting subscription flow with token:', offerToken);
         await requestPurchaseIAP({
           type: 'subs',
           request: {
@@ -344,7 +332,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
         });
       }
     } catch (err: any) {
-      console.warn('IAP: Request Subscription Error', err.code, err.message);
+      // Purchase request failed
       showAlert({
         title: 'Purchase Failed',
         message: err.message || 'The transaction could not be initialized.',

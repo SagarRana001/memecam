@@ -53,7 +53,7 @@ export const generateMemeLines = async (
       await FileSystem.deleteAsync(tempFileUri, { idempotent: true }).catch(() => {});
     }
   } catch (err) {
-    console.error('Failed to prepare image for AI processing:', err);
+    // Failed to prepare image for AI processing
     throw new Error('Failed to analyze the image. Please check your internet and try again! 🔥');
   }
 
@@ -96,7 +96,6 @@ export const generateMemeLines = async (
   for (let i = 0; i < AVAILABLE_MODELS.length; i++) {
     const modelName = AVAILABLE_MODELS[i];
     try {
-      console.log(`--- AI Brainstorming Start (Model: ${modelName}) ---`);
 
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
@@ -152,7 +151,7 @@ export const generateMemeLines = async (
             bottom: Array.isArray(parsed.bottom) ? parsed.bottom : [String(parsed.bottom || ''), ''],
           };
         } catch (e) {
-          console.error('JSON Parse Error:', e);
+          // JSON Parse Error
         }
       }
 
@@ -162,13 +161,13 @@ export const generateMemeLines = async (
       const isLastModel = i === AVAILABLE_MODELS.length - 1;
 
       if (is503 && !isLastModel) {
-        console.warn(`Model ${modelName} is overloaded (503). Attempting fallback to ${AVAILABLE_MODELS[i + 1]}...`);
+        // Model overloaded, attempting fallback
         // Small delay before retry
         await new Promise(resolve => setTimeout(resolve, 1500));
         continue;
       }
 
-      console.error(`AI Generation Error with model ${modelName}:`, error);
+      // AI Generation Error occurred
 
       // Map common OpenRouter/Gemini error messages to user-friendly ones
       let userFriendlyMsg = error.message || '';

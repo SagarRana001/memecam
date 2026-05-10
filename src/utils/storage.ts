@@ -11,7 +11,7 @@ const storage = {
       try {
         return window.localStorage.getItem(key);
       } catch (e) {
-        console.warn('LocalStorage not available:', e);
+        // LocalStorage not available
         return null;
       }
     }
@@ -23,7 +23,7 @@ const storage = {
       try {
         window.localStorage.setItem(key, value);
       } catch (e) {
-        console.warn('LocalStorage not available:', e);
+        // LocalStorage not available
       }
       return;
     }
@@ -35,7 +35,7 @@ const storage = {
       try {
         window.localStorage.removeItem(key);
       } catch (e) {
-        console.warn('LocalStorage not available:', e);
+        // LocalStorage not available
       }
       return;
     }

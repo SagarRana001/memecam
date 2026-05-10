@@ -14,7 +14,7 @@ export const getLanguages = async (): Promise<string[]> => {
       .order('name');
       
     if (error) {
-      console.warn('Failed to fetch languages from DB', error);
+      // Return default languages on error
       return DEFAULT_LANGUAGES;
     }
     
@@ -24,7 +24,7 @@ export const getLanguages = async (): Promise<string[]> => {
     
     return data.map(item => item.name);
   } catch (err) {
-    console.warn('Error fetching languages', err);
+    // Error fetching languages
     return DEFAULT_LANGUAGES;
   }
 };
@@ -45,7 +45,7 @@ export const addLanguageToDb = async (name: string): Promise<boolean> => {
     }
     return true;
   } catch (err) {
-    console.error('Failed to add language', err);
+    // Failed to add language
     return false;
   }
 };

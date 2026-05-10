@@ -44,7 +44,7 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authError || !user) throw new Error("Unauthorized");
 
-    console.log(`[Verify] Platform: ${platform}, User: ${user.id}, Product: ${productId}`);
+
 
     // --- PURCHASE VERIFICATION ---
     // In a production app, you MUST verify the token with Google/Apple API here.
@@ -70,12 +70,12 @@ serve(async (req) => {
         .maybeSingle();
 
       if (existingSubError) {
-        console.error("Error checking existing subscription:", existingSubError);
+        // Error checking existing subscription
         throw existingSubError;
       }
 
       if (existingSub && existingSub.user_id !== user.id) {
-        console.warn(`User ${user.id} tried to claim subscription owned by ${existingSub.user_id}`);
+        // Subscription claim conflict detected
         return new Response(JSON.stringify({ 
           success: false, 
           message: "This subscription is already linked to another account." 
@@ -100,7 +100,7 @@ serve(async (req) => {
         .single();
 
       if (subError) {
-        console.error("Subscription Upsert Error:", subError);
+        // Subscription upsert failed
         throw subError;
       }
 
@@ -123,7 +123,7 @@ serve(async (req) => {
         // If it's a unique constraint violation on transaction_id, it means we already logged it.
         // We can ignore that, but log other errors.
         if (historyError.code !== '23505') {
-           console.warn("Payment History Insert Error:", historyError);
+
         }
       }
 
@@ -139,7 +139,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("[Verify Error]", error);
+    // Internal server error occurred
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,

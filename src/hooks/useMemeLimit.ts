@@ -38,7 +38,7 @@ export const useMemeLimit = () => {
         await storage.setItem(STORAGE_KEY, JSON.stringify({ count: 0, lastDate: today }));
       }
     } catch (e) {
-      console.error('Failed to load usage data', e);
+      // Failed to load usage data
     } finally {
       setLoading(false);
     }
@@ -61,7 +61,7 @@ export const useMemeLimit = () => {
       
       return newCount;
     } catch (e) {
-      console.error('Failed to increment usage', e);
+      // Failed to increment usage
       return 0;
     }
   };
