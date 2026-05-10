@@ -51,7 +51,7 @@ export default function GeneratorScreen() {
       const count = await getUserMemeCount(user.id);
       setIsOverLimit(!isPremium && count >= 3);
     } catch (err) {
-      console.warn('Limit check failed:', err);
+      // Limit check failed
     } finally {
       setCheckLoading(false);
     }
@@ -183,7 +183,7 @@ export default function GeneratorScreen() {
     try {
       // 1. TRIGGER FEEDBACK IMMEDIATELY
       setIsProcessing(true); // Show loader immediately so UI doesn't feel stuck
-      console.log('Capture Initiated...');
+
 
       // 2. CAPTURE
       if (!cameraRef.current) throw new Error('Camera not ready');
@@ -195,11 +195,11 @@ export default function GeneratorScreen() {
       });
 
       if (!photo) throw new Error('Failed to capture photo');
-      console.log('Capture Successful:', photo.uri);
+
 
       // Show the still image immediately
       setCapturedImage(photo.uri);
-      console.log('Capture Successful:', photo.uri);
+
 
       // 3. --- RATE LIMIT CHECK ---
       if (user) {
@@ -223,15 +223,13 @@ export default function GeneratorScreen() {
 
       // --- AI GENERATION STEP ---
       setIsGeneratingAI(true);
-      console.log('Starting AI Brainstorming...');
       const memeLines = await generateMemeLines(processed.uri, style, language);
-      console.log('AI Brainstorming Success:', memeLines);
       setIsGeneratingAI(false);
 
       // --- SUPABASE PREPARATIONS ---
       let memeId = Date.now().toString();
 
-      console.log('Navigating to Result Screen...');
+
       setCapturedImage(null); // Clear memory before navigation
       router.replace({
         pathname: '/result',
@@ -247,7 +245,7 @@ export default function GeneratorScreen() {
       });
 
     } catch (error: any) {
-      console.error('Capture error:', error);
+      // Capture error occurred
       showAlert({
         title: 'Capture Failed',
         message: error.message || 'The fire lab had a malfunction. Try again or pick from gallery!',
@@ -324,7 +322,7 @@ export default function GeneratorScreen() {
       }
 
     } catch (error) {
-      console.error('Picker error:', error);
+      // Picker error occurred
       Alert.alert('Error', 'Failed to pick image from gallery.');
       setCapturedImage(null);
     } finally {

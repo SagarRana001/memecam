@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Modal, View, Text, Pressable, FlatList, StyleSheet, Platform, TextInput, KeyboardAvoidingView, Alert } from 'react-native';
+import { Modal, View, Text, Pressable, FlatList, StyleSheet, Platform, TextInput, KeyboardAvoidingView } from 'react-native';
 import { X, Plus } from 'lucide-react-native';
 import { Colors } from '@/constants/theme';
+import { useAlert } from '../context/AlertContext';
 
 interface SelectionModalProps {
   visible: boolean;
@@ -16,11 +17,19 @@ interface SelectionModalProps {
 }
 
 export function SelectionModal({ visible, onClose, options, selected, onSelect, title, allowAdd, onAdd, addPlaceholder = 'Search or add new...' }: SelectionModalProps) {
+  const { showAlert } = useAlert();
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredOptions = options.filter(option => 
     option.toLowerCase().includes(searchQuery.toLowerCase().trim())
   );
+
+  const handleTextChange = (text: string) => {
+    // Remove numbers and special characters if you want, 
+    // but the user specifically asked for "number not allow"
+    const cleaned = text.replace(/[0-9]/g, '');
+    setSearchQuery(cleaned);
+  };
 
   const handleAdd = () => {
     const trimmedValue = searchQuery.trim();
@@ -28,16 +37,20 @@ export function SelectionModal({ visible, onClose, options, selected, onSelect, 
       // Check if exact match already exists
       const existingMatch = options.find(o => o.toLowerCase() === trimmedValue.toLowerCase());
       if (existingMatch) {
-        onSelect(existingMatch);
+        showAlert({
+          title: 'Duplicate',
+          message: `"${existingMatch}" is already in your list!`,
+          type: 'warning'
+        });
         setSearchQuery('');
-        onClose();
         return;
       }
 
-      Alert.alert(
-        `Add New ${title}`,
-        `Do you want to add "${trimmedValue}"?`,
-        [
+      showAlert({
+        title: `Add New ${title}`,
+        message: `Do you want to add "${trimmedValue}"?`,
+        type: 'info',
+        buttons: [
           { text: 'Cancel', style: 'cancel' },
           { 
             text: 'Add', 
@@ -47,7 +60,7 @@ export function SelectionModal({ visible, onClose, options, selected, onSelect, 
             }
           }
         ]
-      );
+      });
     }
   };
 
@@ -73,7 +86,7 @@ export function SelectionModal({ visible, onClose, options, selected, onSelect, 
                   placeholder={allowAdd ? addPlaceholder : 'Search...'}
                   placeholderTextColor="#A1A1AA"
                   value={searchQuery}
-                  onChangeText={setSearchQuery}
+                  onChangeText={handleTextChange}
                   onSubmitEditing={allowAdd ? handleAdd : undefined}
                   returnKeyType={allowAdd ? "done" : "search"}
                 />

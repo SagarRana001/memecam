@@ -71,7 +71,7 @@ export default function ResultScreen() {
       const parsed = JSON.parse(str);
       return Array.isArray(parsed) ? parsed : [String(parsed), ''];
     } catch (e) {
-      console.error('Failed to parse meme lines:', e);
+      // Failed to parse meme lines
       return fallback;
     }
   };
@@ -87,8 +87,10 @@ export default function ResultScreen() {
   const [recentError, setRecentError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log(`--- Result Screen Loaded (ID: ${id}) ---`);
-    if (!uri) console.warn('Warning: Result screen loaded without a valid image URI');
+    // Result Screen Loaded
+    if (!uri) {
+      // Warning: Result screen loaded without a valid image URI
+    }
     
     // Fetch global languages
     getLanguages().then(setLanguagesList);
