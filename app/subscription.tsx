@@ -19,7 +19,7 @@ export default function SubscriptionScreen() {
 
   const premiumProduct = products.find(p => p.id === 'memecam_premium_monthly');
 
-  const priceLabel = '7-DAY FREE TRIAL • THEN ₹4INR/mo';
+  const priceLabel = '7-DAY FREE TRIAL • THEN ₹799INR/mo';
 
   const handleAccountMenu = () => {
     showAlert({
@@ -168,7 +168,13 @@ export default function SubscriptionScreen() {
             </View>
           )}
 
-          {/* Restore Purchases button removed per request */}
+          <Pressable 
+            onPress={restorePurchases} 
+            style={styles.secondaryActions}
+            disabled={loading}
+          >
+            <Text style={styles.restoreText}>RESTORE PURCHASES</Text>
+          </Pressable>
 
           <View style={styles.dangerZone}>
             <Pressable style={styles.iconAction} onPress={handleLogout}>

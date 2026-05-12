@@ -183,7 +183,8 @@ export default function DashboardScreen() {
             top: item.topLines ? JSON.stringify(item.topLines) : undefined,
             bottom: item.bottomLines ? JSON.stringify(item.bottomLines) : undefined,
             style: item.style,
-            language: item.language
+            language: item.language,
+            isNew: 'false'
           }
         })}
       >

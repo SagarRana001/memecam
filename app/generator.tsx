@@ -16,6 +16,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronDown, Crown, ImagePlus, RotateCcw, X } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -24,6 +25,7 @@ export default function GeneratorScreen() {
   const router = useRouter();
   const { showAlert } = useAlert();
   const [permission, requestPermission] = useCameraPermissions();
+  const isFocused = useIsFocused();
   const [mediaPermission, requestMediaPermission] = ImagePicker.useMediaLibraryPermissions();
 
   const cameraRef = useRef<CameraView>(null);
@@ -366,8 +368,9 @@ export default function GeneratorScreen() {
         <View style={styles.cameraContainer}>
           {capturedImage ? (
             <Image source={{ uri: capturedImage }} style={styles.camera} resizeMode="cover" />
-          ) : permission.granted ? (
+          ) : (permission.granted && isFocused) ? (
             <CameraView
+              key={`${facing}-${isFocused}`}
               ref={cameraRef}
               style={styles.camera}
               facing={facing}
@@ -375,7 +378,7 @@ export default function GeneratorScreen() {
           ) : (
             <Pressable style={styles.permissionPlaceholder} onPress={ensureCameraPermission}>
               <View style={styles.permissionIconContainer}>
-                <CameraView style={{ width: 1, height: 1, opacity: 0 }} />
+                {/* Removed hidden CameraView to prevent native conflicts */}
                 <View style={styles.logoPlaceholder}>
                   <RotateCcw color={Colors.dark.accent} size={40} />
                 </View>

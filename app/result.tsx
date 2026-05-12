@@ -7,7 +7,7 @@ import * as Sharing from 'expo-sharing';
 import { Check, Download, Home, RotateCcw, Share2, X, AlertCircle } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, Image, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ViewShot from 'react-native-view-shot';
 
@@ -27,7 +27,7 @@ import storage from '@/src/utils/storage';
 
 const { width } = Dimensions.get('window');
 
-const STYLES = ['Funny', 'Dark', 'Roast', 'Cute'];
+const DEFAULT_STYLES = ['Funny', 'Dark', 'Roast', 'Cute'];
 
 export default function ResultScreen() {
   const router = useRouter();
@@ -53,11 +53,14 @@ export default function ResultScreen() {
   const initialStyle = Array.isArray(params.style) ? params.style[0] : params.style;
   const initialLanguage = Array.isArray(params.language) ? params.language[0] : params.language;
   const isNew = Array.isArray(params.isNew) ? params.isNew[0] : params.isNew;
+  const isFromDashboard = !isNew || isNew === 'false' || uri?.startsWith('http');
+  const isReallyNew = isNew === 'true' && !uri?.startsWith('http');
   
-  const [shouldAutoSave, setShouldAutoSave] = useState(isNew === 'true');
+  const [shouldAutoSave, setShouldAutoSave] = useState(isReallyNew);
 
-  const [currentStyle, setCurrentStyle] = useState(initialStyle || 'Funny');
-  const [currentLanguage, setCurrentLanguage] = useState(initialLanguage || 'English');
+  const [currentStyle, setCurrentStyle] = useState(initialStyle || 'Roast');
+  const [currentLanguage, setCurrentLanguage] = useState(initialLanguage || 'Hinglish');
+  const [stylesList, setStylesList] = useState<string[]>(DEFAULT_STYLES);
   const [languagesList, setLanguagesList] = useState<string[]>([]);
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
@@ -86,14 +89,33 @@ export default function ResultScreen() {
   const [isUploadingToCloud, setIsUploadingToCloud] = useState(false);
   const [recentError, setRecentError] = useState<string | null>(null);
 
+  // Sync state with params when they change (e.g. new generation)
+  useEffect(() => {
+    if (initialStyle) setCurrentStyle(initialStyle);
+    if (initialLanguage) setCurrentLanguage(initialLanguage);
+  }, [initialStyle, initialLanguage]);
+
   useEffect(() => {
     // Result Screen Loaded
     if (!uri) {
       // Warning: Result screen loaded without a valid image URI
     }
     
-    // Fetch global languages
-    getLanguages().then(setLanguagesList);
+    // Fetch global lists
+    const fetchLists = async () => {
+      try {
+        const [langs, styles] = await Promise.all([
+          getLanguages(),
+          import('@/src/services/styleService').then(m => m.getStyles())
+        ]);
+        setLanguagesList(langs);
+        setStylesList(styles);
+      } catch (err) {
+        // Fallback handled by services
+      }
+    };
+    
+    fetchLists();
   }, [id, uri]);
 
   const handleLanguageSelect = (lang: string) => {
@@ -104,6 +126,39 @@ export default function ResultScreen() {
   const handleStyleSelect = (style: string) => {
     setCurrentStyle(style);
     storage.setItem('preferred_style', style);
+  };
+
+  const triggerAIReload = async (targetStyle: string, targetLang: string) => {
+    if (!uri || isReloading) return;
+    try {
+      setIsReloading(true);
+      setRecentError(null);
+
+      const newLines = await generateMemeLines(uri, targetStyle, targetLang);
+      setTopLines(newLines.top);
+      setBottomLines(newLines.bottom);
+      setShouldAutoSave(true);
+      
+      if (id) {
+        const fullCaption = [...newLines.top, ...newLines.bottom].join(' ');
+        await updateMemeInHistory(id, {
+          topLines: newLines.top,
+          bottomLines: newLines.bottom,
+          style: targetStyle,
+          language: targetLang,
+          caption: fullCaption
+        });
+      }
+    } catch (error: any) {
+      console.error('Auto-reload failed:', error);
+      showAlert({
+        title: 'AI Error',
+        message: error.message || 'Failed to refresh the fire. 🔥',
+        type: 'error'
+      });
+    } finally {
+      setIsReloading(false);
+    }
   };
 
   const handleAddLanguage = async (newLang: string) => {
@@ -187,67 +242,6 @@ export default function ResultScreen() {
   }, [isImageLoaded, topLines, bottomLines, isReloading, shouldAutoSave]);
 
 
-  // Re-generate AI text for the same image
-  const handleReload = async () => {
-
-    if (!uri) return;
-    try {
-      setIsReloading(true);
-      setRecentError(null);
-
-      // --- RATE LIMIT CHECK ---
-      if (user) {
-        const count = await getUserMemeCount(user.id);
-        if (!isPremium && count >= 3) {
-          showAlert({
-            title: 'Limit Reached',
-            message: 'You have used your 3 free memes. Upgrade to Premium for more fire! 🔥',
-            type: 'warning',
-            buttons: [
-              { text: 'Later', style: 'cancel' },
-              { text: 'UPGRADE NOW', onPress: () => router.push('/subscription') }
-            ]
-          });
-          setIsReloading(false);
-          return;
-        }
-      }
-
-      const newLines = await generateMemeLines(uri, currentStyle, currentLanguage);
-      setTopLines(newLines.top);
-      setBottomLines(newLines.bottom);
-      setShouldAutoSave(true);
-
-      // --- SUPABASE SAVE STEP is now handled by the useEffect above ---
-      // which triggers when topLines/bottomLines change.
-      
-      // Update local history if needed
-      if (id) {
-        const fullCaption = [...newLines.top, ...newLines.bottom].join(' ');
-        await updateMemeInHistory(id, {
-          topLines: newLines.top,
-          bottomLines: newLines.bottom,
-          style: currentStyle,
-          language: currentLanguage,
-          caption: fullCaption
-        });
-      }
-
-    } catch (error: any) {
-      console.error('Reload failed:', error);
-      const msg = error.message || 'Failed to brainstorm more fire. Try again later! 🔥';
-      setRecentError(msg);
-      // We still show the custom alert for high visibility
-      showAlert({
-        title: 'AI Error',
-        message: msg,
-        type: 'error'
-      });
-    } finally {
-      setIsReloading(false);
-    }
-
-  };
 
   const handleShare = async () => {
     try {
@@ -342,7 +336,7 @@ export default function ResultScreen() {
           <Home color="#FFF" size={28} />
         </Pressable>
         
-        {isNew === 'true' && (
+        {isReallyNew && (
           <View style={styles.dropdowns}>
             <Pressable onPress={() => setShowStyleModal(true)} style={styles.dropdown}>
               <Text style={styles.dropdownText}>{currentStyle}</Text>
@@ -355,8 +349,8 @@ export default function ResultScreen() {
           </View>
         )}
 
-        {isNew === 'true' && (
-          <Pressable onPress={handleReload} disabled={isReloading} style={styles.reloadButton}>
+        {isReallyNew && (
+          <Pressable onPress={() => triggerAIReload(currentStyle, currentLanguage)} disabled={isReloading} style={styles.reloadButton}>
             <RotateCcw color={isReloading ? Colors.dark.muted : Colors.dark.accent} size={28} />
           </Pressable>
         )}
@@ -368,7 +362,7 @@ export default function ResultScreen() {
           options={{ format: 'jpg', quality: 1.0, result: 'tmpfile' }}
         >
           <Animated.View
-            entering={ZoomIn.duration(600).springify().damping(15)}
+            entering={FadeIn.duration(600)}
             style={styles.memeContainer}
             collapsable={false}
           >
@@ -378,37 +372,39 @@ export default function ResultScreen() {
               onLoad={() => setIsImageLoaded(true)}
             />
 
-            <View style={styles.textOverlay} collapsable={false}>
-              {/* Top Text Cluster */}
-              <View style={styles.topCluster}>
-                {topLines.map((line, i) => (
-                  <Text
-                    key={`top-${i}`}
-                    style={styles.memeText}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.5}
-                  >
-                    {line.toUpperCase()}
-                  </Text>
-                ))}
-              </View>
+            {isReallyNew && (
+              <View style={styles.textOverlay} collapsable={false}>
+                {/* Top Text Cluster */}
+                <View style={styles.topCluster}>
+                  {topLines.map((line, i) => (
+                    <Text
+                      key={`top-${i}`}
+                      style={styles.memeText}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.5}
+                    >
+                      {line.toUpperCase()}
+                    </Text>
+                  ))}
+                </View>
 
-              {/* Bottom Text Cluster */}
-              <View style={styles.bottomCluster}>
-                {bottomLines.map((line, i) => (
-                  <Text
-                    key={`bottom-${i}`}
-                    style={styles.memeText}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.5}
-                  >
-                    {line.toUpperCase()}
-                  </Text>
-                ))}
+                {/* Bottom Text Cluster */}
+                <View style={styles.bottomCluster}>
+                  {bottomLines.map((line, i) => (
+                    <Text
+                      key={`bottom-${i}`}
+                      style={styles.memeText}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.5}
+                    >
+                      {line.toUpperCase()}
+                    </Text>
+                  ))}
+                </View>
               </View>
-            </View>
+            )}
 
             {/* Reloading Overlay */}
             {isReloading && (
@@ -418,7 +414,7 @@ export default function ResultScreen() {
                     <AlertCircle color="#FF4D4D" size={48} />
                     <Text style={[styles.loadingText, { color: '#FF4D4D' }]}>BRAINSTORMING FAILED</Text>
                     <Text style={styles.errorSubtext}>{recentError}</Text>
-                    <Pressable style={styles.retryMiniButton} onPress={handleReload}>
+                    <Pressable style={styles.retryMiniButton} onPress={() => triggerAIReload(currentStyle, currentLanguage)}>
                       <RotateCcw color="#FFF" size={16} />
                       <Text style={styles.retryMiniText}>TRY AGAIN</Text>
                     </Pressable>
@@ -432,7 +428,7 @@ export default function ResultScreen() {
               </View>
             )}
 
-            {!isPremium && (
+            {isReallyNew && !isPremium && (
               <View style={styles.diagonalWatermark} pointerEvents="none">
                 <Text style={styles.diagonalText}>Memecam.in</Text>
               </View>
@@ -463,7 +459,7 @@ export default function ResultScreen() {
       <SelectionModal 
         visible={showStyleModal} 
         onClose={() => setShowStyleModal(false)}
-        options={STYLES}
+        options={stylesList}
         selected={currentStyle}
         onSelect={handleStyleSelect}
         title="SELECT STYLE"

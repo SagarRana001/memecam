@@ -36,7 +36,8 @@ serve(async (req) => {
       transactionId, 
       amountMicros, 
       currency,
-      transactionDate 
+      transactionDate,
+      status = 'succeeded'
     } = body;
 
     // 1. Get User ID from Auth header
@@ -44,98 +45,105 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authError || !user) throw new Error("Unauthorized");
 
-
-
-    // --- PURCHASE VERIFICATION ---
-    // In a production app, you MUST verify the token with Google/Apple API here.
-    // For now, we assume the token is valid if the client passed it after a successful IAP flow.
-    let isValid = !!purchaseToken;
+    // --- LOGGING & VERIFICATION ---
+    console.log(`Processing ${status} purchase for user ${user.id} on ${platform}. Product: ${productId}`);
     
-    // Anchor the expiration to the actual transaction date, so it doesn't infinitely extend.
-    const baseTime = transactionDate ? Number(transactionDate) : Date.now();
-    
-    // Calculate expiration "month-wise" (exactly 1 calendar month from the payment date)
-    const expiryDate = new Date(baseTime);
-    expiryDate.setMonth(expiryDate.getMonth() + 1);
-    let expiryTimeMillis = expiryDate.getTime();
+    const finalTransactionId = transactionId || purchaseToken || `failed_${Date.now()}`;
+    let subData = null;
 
-    if (isValid) {
-      const finalTransactionId = transactionId || purchaseToken;
-
-      // Check if this subscription is already linked to another user
-      const { data: existingSub, error: existingSubError } = await supabaseClient
-        .from("user_subscriptions")
-        .select("user_id")
-        .eq("external_subscription_id", finalTransactionId)
-        .maybeSingle();
-
-      if (existingSubError) {
-        // Error checking existing subscription
-        throw existingSubError;
-      }
-
-      if (existingSub && existingSub.user_id !== user.id) {
-        // Subscription claim conflict detected
-        return new Response(JSON.stringify({ 
-          success: false, 
-          message: "This subscription is already linked to another account." 
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 409,
-        });
-      }
-
-      // 2. Update Subscription Table
-      const { data: subData, error: subError } = await supabaseClient
-        .from("user_subscriptions")
-        .upsert({
-          user_id: user.id,
-          status: "active",
-          product_id: productId,
-          platform: platform,
-          current_period_end: new Date(expiryTimeMillis).toISOString(),
-          external_subscription_id: finalTransactionId,
-        }, { onConflict: "user_id" })
-        .select()
-        .single();
-
-      if (subError) {
-        // Subscription upsert failed
-        throw subError;
-      }
-
-      // 3. Log Payment History
-      const { error: historyError } = await supabaseClient
-        .from("payment_history")
-        .insert({
-          user_id: user.id,
-          subscription_id: subData?.id,
-          transaction_id: finalTransactionId,
-          product_id: productId,
-          purchase_token: purchaseToken,
-          status: "succeeded",
-          amount_micros: amountMicros || 799000000,
-          currency: currency || "INR",
-          raw_payload: { ...body, verified_at: new Date().toISOString() }
-        });
-
-      if (historyError) {
-        // If it's a unique constraint violation on transaction_id, it means we already logged it.
-        // We can ignore that, but log other errors.
-        if (historyError.code !== '23505') {
-
+    if (status === 'succeeded') {
+      // In a production app, you MUST verify the token with Google/Apple API here.
+      // For now, we assume the token is valid if the client passed it after a successful IAP flow.
+      let isValid = !!purchaseToken || (platform === 'ios' && !!transactionId);
+      
+      // Anchor the expiration to the actual transaction date, so it doesn't infinitely extend.
+      let baseTime: number;
+      if (transactionDate) {
+        const d = new Date(transactionDate);
+        if (!isNaN(d.getTime())) {
+          baseTime = d.getTime();
+        } else if (!isNaN(Number(transactionDate))) {
+          baseTime = Number(transactionDate);
+        } else {
+          baseTime = Date.now();
         }
+      } else {
+        baseTime = Date.now();
       }
+      
+      // Calculate expiration "month-wise" (exactly 1 calendar month from the payment date)
+      const expiryDate = new Date(baseTime);
+      expiryDate.setMonth(expiryDate.getMonth() + 1);
+      let expiryTimeMillis = expiryDate.getTime();
 
-      return new Response(JSON.stringify({ success: true, subscription: subData }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+      if (isValid) {
+        // Check if this subscription is already linked to another user
+        const { data: existingSub, error: existingSubError } = await supabaseClient
+          .from("user_subscriptions")
+          .select("user_id")
+          .eq("external_subscription_id", finalTransactionId)
+          .maybeSingle();
+
+        if (existingSubError) throw existingSubError;
+
+        if (existingSub && existingSub.user_id !== user.id) {
+          // Subscription claim conflict detected - RE-ASSIGN to current user
+          console.log(`Re-assigning subscription ${finalTransactionId} from user ${existingSub.user_id} to user ${user.id}`);
+          
+          await supabaseClient
+            .from("user_subscriptions")
+            .update({ 
+              external_subscription_id: null,
+              status: 'expired',
+              updated_at: new Date().toISOString()
+            })
+            .eq("user_id", existingSub.user_id);
+        }
+
+        // 2. Update Subscription Table
+        const { data: updatedSub, error: subError } = await supabaseClient
+          .from("user_subscriptions")
+          .upsert({
+            user_id: user.id,
+            status: "active",
+            product_id: productId,
+            platform: platform,
+            current_period_end: new Date(expiryTimeMillis).toISOString(),
+            external_subscription_id: finalTransactionId,
+          }, { onConflict: "user_id" })
+          .select()
+          .single();
+
+        if (subError) throw subError;
+        subData = updatedSub;
+      }
     }
 
-    return new Response(JSON.stringify({ success: false, message: "Invalid purchase" }), {
+    // 3. Log Payment History (Always do this, whether success or failure)
+    const { error: historyError } = await supabaseClient
+      .from("payment_history")
+      .insert({
+        user_id: user.id,
+        subscription_id: subData?.id,
+        transaction_id: finalTransactionId,
+        product_id: productId,
+        purchase_token: purchaseToken,
+        status: status, // 'succeeded' or 'failed'
+        amount_micros: amountMicros || 799000000,
+        currency: currency || "INR",
+        raw_payload: { ...body, processed_at: new Date().toISOString() }
+      });
+
+    if (historyError && historyError.code !== '23505') {
+      console.error("Error logging payment history:", historyError);
+    }
+
+    return new Response(JSON.stringify({ 
+      success: status === 'succeeded', 
+      subscription: subData 
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 400,
+      status: 200,
     });
 
   } catch (error) {

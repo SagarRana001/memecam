@@ -15,7 +15,8 @@ import {
   purchaseUpdatedListener,
   requestPurchase as requestPurchaseIAP,
   type Product,
-  type Purchase
+  type Purchase,
+  PurchaseState
 } from 'react-native-iap';
 
 // Product IDs from various stores
@@ -88,13 +89,21 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
   // 2. Setup purchase listeners
   useEffect(() => {
     const purchaseUpdateSubscription = purchaseUpdatedListener(async (purchase) => {
-
-      // In v15, we should check for 'purchased' state
-      if (purchase.purchaseState === 'purchased' || (purchase.transactionReceipt && Platform.OS === 'ios')) {
+      if (purchase.purchaseState === 'purchased' || purchase.purchaseState === PurchaseState.PurchasedAndroid || (purchase.transactionReceipt && Platform.OS === 'ios')) {
         try {
-          // 1. SYNC TO BACKEND FIRST
-          // This ensures we have a record before we tell the store we're done.
-          const success = await syncPurchaseWithBackend(purchase);
+          // 1. OPTIMISTIC UPDATE
+          setIsPremium(true);
+          const thirtyDaysFromNow = new Date();
+          thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+          
+          setSubscription({
+            status: 'active',
+            current_period_end: thirtyDaysFromNow.toISOString(),
+            product_id: purchase.productId
+          });
+
+          // 2. SYNC TO BACKEND
+          const success = await syncPurchaseWithBackend(purchase, 'succeeded');
 
           if (success) {
             if (Platform.OS === 'android' && !purchase.isAcknowledgedAndroid) {
@@ -112,12 +121,17 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
         } catch (ackErr) {
           // Transaction finalization failed
         }
-      } else if (purchase.purchaseState === 'pending') {
       }
     });
 
     const purchaseErrorSubscription = purchaseErrorListener((error) => {
       if (error.code !== 'E_USER_CANCELLED' && error.code !== 'USER_CANCELED') {
+        // Log failure to database
+        syncPurchaseWithBackend({
+          productId: itemSkus[0], // Default SKU
+          transactionDate: String(Date.now()),
+        } as any, 'failed', error.message);
+
         showAlert({
           title: 'Purchase Error',
           message: error.message || 'Something went wrong with the transaction.',
@@ -165,7 +179,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
         const activePurchase = purchases.find(p => itemSkus.includes(p.productId));
         if (activePurchase) {
           // Sync it securely. It will refresh subscription status internally if successful.
-          const syncSuccess = await syncPurchaseWithBackend(activePurchase, isSilent);
+          const syncSuccess = await syncPurchaseWithBackend(activePurchase, 'succeeded', undefined, isSilent);
           return syncSuccess;
         }
       } else {
@@ -226,11 +240,10 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     refreshSubscriptionStatus();
   }, [refreshSubscriptionStatus]);
 
-  const syncPurchaseWithBackend = async (purchase: Purchase, isSilent = false) => {
+  const syncPurchaseWithBackend = async (purchase: Purchase, status: 'succeeded' | 'failed' = 'succeeded', errorMessage?: string, isSilent = false) => {
     if (!user?.id) return false;
 
     try {
-
       const product = products.find(p => p.id === purchase.productId);
       const amountMicros = product ? parseInt(product.priceAmountMicros) : 799000000;
       const currency = product ? product.currency : 'INR';
@@ -244,7 +257,9 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
           transactionId: purchase.transactionId,
           amountMicros: amountMicros,
           currency: currency,
-          transactionDate: purchase.transactionDate
+          transactionDate: purchase.transactionDate,
+          status: status,
+          errorMessage: errorMessage
         }
       });
 
@@ -252,16 +267,14 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
         throw error;
       }
 
-      if (data) {
-        // Purchase synced successfully
+      if (data && status === 'succeeded') {
+        // Refresh the local subscription state
+        await refreshSubscriptionStatus();
       }
-
-      // Refresh the local subscription state
-      await refreshSubscriptionStatus();
       return true;
     } catch (err) {
       // Sync error handled via alert in UI flow
-      if (!isSilent) {
+      if (!isSilent && status === 'succeeded') {
         showAlert({
           title: 'Sync Failed',
           message: 'This subscription is already linked to another account, or there was a network error.',
@@ -279,15 +292,33 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
       setLoading(true);
 
       if (products.length === 0) {
-        showAlert({
-          title: 'Store Syncing',
-          message: 'Google Play is still processing your new subscription. Please try again in 30 minutes. 🔥',
-          type: 'info'
-        });
-        return;
+        // Try one more fetch if the connection was slow to initialize
+        try {
+          const getSubs = await fetchProducts({ skus: itemSkus, type: 'subs' });
+          if (getSubs && getSubs.length > 0) {
+            setProducts(getSubs as Product[]);
+            // Continue with the newly fetched product
+          } else {
+            showAlert({
+              title: 'Store Syncing',
+              message: 'Google Play is still processing your new subscription. Please try again in a few moments. 🔥',
+              type: 'info'
+            });
+            return;
+          }
+        } catch (e) {
+          showAlert({
+            title: 'Store Connection',
+            message: 'Unable to reach Google Play. Please check your internet and try again.',
+            type: 'warning'
+          });
+          return;
+        }
       }
 
-      const product = products.find(p => p.id === sku);
+      // Re-check products after potential retry
+      const currentProducts = products.length > 0 ? products : (await fetchProducts({ skus: itemSkus, type: 'subs' }) as Product[]);
+      const product = currentProducts.find(p => p.id === sku);
       if (!product) {
         showAlert({
           title: 'Product Not Found',
