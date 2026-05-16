@@ -6,8 +6,8 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useBilling } from '@/src/context/BillingContext';
 import { generateMemeLines } from '@/src/services/aiService';
 import { getUserMemeCount } from '@/src/services/memeService';
-import { getLanguages, addLanguageToDb } from '@/src/services/languageService';
-import { getStyles, addStyleToDb } from '@/src/services/styleService';
+import { getLanguages, addLanguageToDb, SelectionOption, likeLanguage } from '@/src/services/languageService';
+import { getStyles, addStyleToDb, likeStyle } from '@/src/services/styleService';
 import storage from '@/src/utils/storage';
 import { processMemeImage } from '@/src/utils/imageProcessor';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -44,8 +44,8 @@ export default function GeneratorScreen() {
   const { isPremium } = useBilling();
 
 
-  const [stylesList, setStylesList] = useState<string[]>(['Funny', 'Dark', 'Roast', 'Cute']);
-  const [languagesList, setLanguagesList] = useState<string[]>([]);
+  const [stylesList, setStylesList] = useState<SelectionOption[]>([]);
+  const [languagesList, setLanguagesList] = useState<SelectionOption[]>([]);
 
   const checkLimit = useCallback(async () => {
     if (!user) return;
@@ -97,8 +97,8 @@ export default function GeneratorScreen() {
   const handleAddLanguage = async (newLang: string) => {
     if (!newLang) return;
     // Optimistic update
-    if (!languagesList.includes(newLang)) {
-      setLanguagesList(prev => [...prev, newLang]);
+    if (!languagesList.some(l => l.name === newLang)) {
+      setLanguagesList(prev => [...prev, { name: newLang, likes: 1 }]);
     }
     handleLanguageSelect(newLang);
     setShowLanguageModal(false);
@@ -107,11 +107,25 @@ export default function GeneratorScreen() {
     await addLanguageToDb(newLang);
   };
 
+  const handleLikeLanguage = async (lang: string) => {
+    setLanguagesList(prev => prev.map(l => 
+      l.name === lang ? { ...l, likes: (l.likes || 0) + 1 } : l
+    ));
+    await likeLanguage(lang);
+  };
+
+  const handleLikeStyle = async (styleName: string) => {
+    setStylesList(prev => prev.map(s => 
+      s.name === styleName ? { ...s, likes: (s.likes || 0) + 1 } : s
+    ));
+    await likeStyle(styleName);
+  };
+
   const handleAddStyle = async (newStyle: string) => {
     if (!newStyle) return;
     // Optimistic update
-    if (!stylesList.includes(newStyle)) {
-      setStylesList(prev => [...prev, newStyle]);
+    if (!stylesList.some(s => s.name === newStyle)) {
+      setStylesList(prev => [...prev, { name: newStyle, likes: 1 }]);
     }
     handleStyleSelect(newStyle);
     setShowStyleModal(false);
@@ -444,6 +458,7 @@ export default function GeneratorScreen() {
         options={stylesList}
         selected={style}
         onSelect={handleStyleSelect}
+        onLike={handleLikeStyle}
         title="Enter Style"
         allowAdd={true}
         onAdd={handleAddStyle}
@@ -456,6 +471,7 @@ export default function GeneratorScreen() {
         options={languagesList}
         selected={language}
         onSelect={handleLanguageSelect}
+        onLike={handleLikeLanguage}
         title="Enter Language"
         allowAdd={true}
         onAdd={handleAddLanguage}

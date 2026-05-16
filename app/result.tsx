@@ -20,7 +20,7 @@ import { useAlert } from '@/src/context/AlertContext';
 
 import { ChevronDown } from 'lucide-react-native';
 import { useEffect } from 'react';
-import { getLanguages, addLanguageToDb } from '@/src/services/languageService';
+import { getLanguages, addLanguageToDb, SelectionOption, likeLanguage } from '@/src/services/languageService';
 import storage from '@/src/utils/storage';
 
 
@@ -43,6 +43,7 @@ export default function ResultScreen() {
     style: string; 
     language: string;
     isNew?: string;
+    rawUrl?: string;
   }>();
 
   // Safely extract params (handle both string and string[])
@@ -53,6 +54,7 @@ export default function ResultScreen() {
   const initialStyle = Array.isArray(params.style) ? params.style[0] : params.style;
   const initialLanguage = Array.isArray(params.language) ? params.language[0] : params.language;
   const isNew = Array.isArray(params.isNew) ? params.isNew[0] : params.isNew;
+  const rawUrl = Array.isArray(params.rawUrl) ? params.rawUrl[0] : params.rawUrl;
   const isFromDashboard = !isNew || isNew === 'false' || uri?.startsWith('http');
   const isReallyNew = isNew === 'true' && !uri?.startsWith('http');
   
@@ -60,8 +62,8 @@ export default function ResultScreen() {
 
   const [currentStyle, setCurrentStyle] = useState(initialStyle || 'Roast');
   const [currentLanguage, setCurrentLanguage] = useState(initialLanguage || 'Hinglish');
-  const [stylesList, setStylesList] = useState<string[]>(DEFAULT_STYLES);
-  const [languagesList, setLanguagesList] = useState<string[]>([]);
+  const [stylesList, setStylesList] = useState<SelectionOption[]>([]);
+  const [languagesList, setLanguagesList] = useState<SelectionOption[]>([]);
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
@@ -78,6 +80,8 @@ export default function ResultScreen() {
       return fallback;
     }
   };
+
+  const [isEditing, setIsEditing] = useState(false);
 
   // State for dynamic meme text
   const [topLines, setTopLines] = useState<string[]>(safeJsonParse(top, ['MEME COMES HERE', 'IN 2 LINES']));
@@ -118,6 +122,23 @@ export default function ResultScreen() {
     fetchLists();
   }, [id, uri]);
 
+  const handleLikeLanguage = async (lang: string) => {
+    // Optimistic update
+    setLanguagesList(prev => prev.map(l => 
+      l.name === lang ? { ...l, likes: (l.likes || 0) + 1 } : l
+    ));
+    await likeLanguage(lang);
+  };
+
+  const handleLikeStyle = async (styleName: string) => {
+    // Optimistic update
+    setStylesList(prev => prev.map(s => 
+      s.name === styleName ? { ...s, likes: (s.likes || 0) + 1 } : s
+    ));
+    const { likeStyle } = await import('@/src/services/styleService');
+    await likeStyle(styleName);
+  };
+
   const handleLanguageSelect = (lang: string) => {
     setCurrentLanguage(lang);
     storage.setItem('preferred_language', lang);
@@ -138,6 +159,7 @@ export default function ResultScreen() {
       setTopLines(newLines.top);
       setBottomLines(newLines.bottom);
       setShouldAutoSave(true);
+      setIsEditing(true);
       
       if (id) {
         const fullCaption = [...newLines.top, ...newLines.bottom].join(' ');
@@ -197,13 +219,19 @@ export default function ResultScreen() {
       const captureUri = existingCaptureUri || await viewShotRef.current!.capture();
       
       // 3. Upload to Supabase Storage
-      const publicUrl = await uploadMemeImage(captureUri, user!.id);
+      const [publicUrl, rawPublicUrl] = await Promise.all([
+        uploadMemeImage(captureUri, user!.id),
+        // If we have a local URI (new generation), upload it as raw. 
+        // If it's already a URL, it might already be raw or burned.
+        (!uri.startsWith('http')) ? uploadMemeImage(uri, user!.id) : Promise.resolve(rawUrl || uri)
+      ]);
       
       // 4. Save to DB record
       const fullCaption = [...topLines, ...bottomLines].join(' ');
       await saveMemeToDb({
         user_id: user!.id,
         image_url: publicUrl,
+        raw_image_url: rawPublicUrl,
         caption: fullCaption,
         metadata: {
           style: currentStyle,
@@ -336,24 +364,20 @@ export default function ResultScreen() {
           <Home color="#FFF" size={28} />
         </Pressable>
         
-        {isReallyNew && (
-          <View style={styles.dropdowns}>
-            <Pressable onPress={() => setShowStyleModal(true)} style={styles.dropdown}>
-              <Text style={styles.dropdownText}>{currentStyle}</Text>
-              <ChevronDown color={Colors.dark.accent} size={16} />
-            </Pressable>
-            <Pressable onPress={() => setShowLanguageModal(true)} style={styles.dropdown}>
-              <Text style={styles.dropdownText}>{currentLanguage}</Text>
-              <ChevronDown color={Colors.dark.accent} size={16} />
-            </Pressable>
-          </View>
-        )}
-
-        {isReallyNew && (
-          <Pressable onPress={() => triggerAIReload(currentStyle, currentLanguage)} disabled={isReloading} style={styles.reloadButton}>
-            <RotateCcw color={isReloading ? Colors.dark.muted : Colors.dark.accent} size={28} />
+        <View style={styles.dropdowns}>
+          <Pressable onPress={() => setShowStyleModal(true)} style={styles.dropdown}>
+            <Text style={styles.dropdownText}>{currentStyle}</Text>
+            <ChevronDown color={Colors.dark.accent} size={16} />
           </Pressable>
-        )}
+          <Pressable onPress={() => setShowLanguageModal(true)} style={styles.dropdown}>
+            <Text style={styles.dropdownText}>{currentLanguage}</Text>
+            <ChevronDown color={Colors.dark.accent} size={16} />
+          </Pressable>
+        </View>
+
+        <Pressable onPress={() => triggerAIReload(currentStyle, currentLanguage)} disabled={isReloading} style={styles.reloadButton}>
+          <RotateCcw color={isReloading ? Colors.dark.muted : Colors.dark.accent} size={28} />
+        </Pressable>
       </View>
 
       <View style={styles.content}>
@@ -367,12 +391,12 @@ export default function ResultScreen() {
             collapsable={false}
           >
             <Image
-              source={{ uri: uri || 'https://picsum.photos/seed/meme/800/800' }}
+              source={{ uri: rawUrl || uri || 'https://picsum.photos/seed/meme/800/800' }}
               style={styles.memeImage}
               onLoad={() => setIsImageLoaded(true)}
             />
 
-            {isReallyNew && (
+            {(isReallyNew || isEditing || (isFromDashboard && !!rawUrl)) && (
               <View style={styles.textOverlay} collapsable={false}>
                 {/* Top Text Cluster */}
                 <View style={styles.topCluster}>
@@ -428,7 +452,7 @@ export default function ResultScreen() {
               </View>
             )}
 
-            {isReallyNew && !isPremium && (
+            {(isReallyNew || isEditing) && !isPremium && (
               <View style={styles.diagonalWatermark} pointerEvents="none">
                 <Text style={styles.diagonalText}>Memecam.in</Text>
               </View>
@@ -462,6 +486,7 @@ export default function ResultScreen() {
         options={stylesList}
         selected={currentStyle}
         onSelect={handleStyleSelect}
+        onLike={handleLikeStyle}
         title="SELECT STYLE"
       />
 
@@ -471,6 +496,7 @@ export default function ResultScreen() {
         options={languagesList}
         selected={currentLanguage}
         onSelect={handleLanguageSelect}
+        onLike={handleLikeLanguage}
         title="SELECT LANGUAGE"
         allowAdd={true}
         onAdd={handleAddLanguage}

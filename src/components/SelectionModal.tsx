@@ -1,66 +1,75 @@
 import React, { useState } from 'react';
 import { Modal, View, Text, Pressable, FlatList, StyleSheet, Platform, TextInput, KeyboardAvoidingView } from 'react-native';
-import { X, Plus } from 'lucide-react-native';
+import { X, Plus, Heart } from 'lucide-react-native';
 import { Colors } from '@/constants/theme';
 import { useAlert } from '../context/AlertContext';
+import { SelectionOption } from '../services/languageService';
 
 interface SelectionModalProps {
   visible: boolean;
   onClose: () => void;
-  options: string[];
+  options: SelectionOption[];
   selected: string;
   onSelect: (option: string) => void;
+  onLike?: (option: string) => void;
   title: string;
   allowAdd?: boolean;
   onAdd?: (newOption: string) => void;
   addPlaceholder?: string;
 }
 
-export function SelectionModal({ visible, onClose, options, selected, onSelect, title, allowAdd, onAdd, addPlaceholder = 'Search or add new...' }: SelectionModalProps) {
+export function SelectionModal({ 
+  visible, 
+  onClose, 
+  options, 
+  selected, 
+  onSelect, 
+  onLike,
+  title, 
+  allowAdd, 
+  onAdd, 
+  addPlaceholder = 'Search or add new...' 
+}: SelectionModalProps) {
   const { showAlert } = useAlert();
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredOptions = options.filter(option => 
-    option.toLowerCase().includes(searchQuery.toLowerCase().trim())
-  );
+  const filteredOptions = options
+    .filter(option => 
+      option.name.toLowerCase().includes(searchQuery.toLowerCase().trim())
+    )
+    .sort((a, b) => (b.likes || 0) - (a.likes || 0));
 
   const handleTextChange = (text: string) => {
-    // Remove numbers and special characters if you want, 
-    // but the user specifically asked for "number not allow"
+    // Remove numbers as per previous requirement
     const cleaned = text.replace(/[0-9]/g, '');
-    setSearchQuery(cleaned);
+    
+    if (cleaned.length > 0) {
+      // First letter capital, rest small
+      const formatted = cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+      setSearchQuery(formatted);
+    } else {
+      setSearchQuery('');
+    }
   };
 
   const handleAdd = () => {
     const trimmedValue = searchQuery.trim();
     if (trimmedValue && onAdd) {
       // Check if exact match already exists
-      const existingMatch = options.find(o => o.toLowerCase() === trimmedValue.toLowerCase());
+      const existingMatch = options.find(o => o.name.toLowerCase() === trimmedValue.toLowerCase());
       if (existingMatch) {
         showAlert({
           title: 'Duplicate',
-          message: `"${existingMatch}" is already in your list!`,
+          message: `"${existingMatch.name}" is already in your list!`,
           type: 'warning'
         });
         setSearchQuery('');
         return;
       }
 
-      showAlert({
-        title: `Add New ${title}`,
-        message: `Do you want to add "${trimmedValue}"?`,
-        type: 'info',
-        buttons: [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Add', 
-            onPress: () => {
-              onAdd(trimmedValue);
-              setSearchQuery('');
-            }
-          }
-        ]
-      });
+      // Requirement: Remove the prompt and add immediately
+      onAdd(trimmedValue);
+      setSearchQuery('');
     }
   };
 
@@ -89,6 +98,7 @@ export function SelectionModal({ visible, onClose, options, selected, onSelect, 
                   onChangeText={handleTextChange}
                   onSubmitEditing={allowAdd ? handleAdd : undefined}
                   returnKeyType={allowAdd ? "done" : "search"}
+                  autoCapitalize="words"
                 />
                 {allowAdd && (
                   <Pressable 
@@ -104,21 +114,38 @@ export function SelectionModal({ visible, onClose, options, selected, onSelect, 
 
             <FlatList 
               data={filteredOptions}
-              keyExtractor={(item) => item}
+              keyExtractor={(item) => item.name}
               keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => (
-                <Pressable 
-                  style={[styles.optionItem, selected === item && styles.optionItemSelected]}
-                  onPress={() => {
-                    onSelect(item);
-                    onClose();
-                  }}
-                >
-                  <Text style={[styles.optionText, selected === item && styles.optionTextSelected]}>
-                    {item.toUpperCase()}
-                  </Text>
-                  {selected === item && <View style={styles.selectedDot} />}
-                </Pressable>
+                <View style={[styles.optionItemContainer, selected === item.name && styles.optionItemSelected]}>
+                  <Pressable 
+                    style={styles.optionItem}
+                    onPress={() => {
+                      onSelect(item.name);
+                      onClose();
+                    }}
+                  >
+                    <Text style={[styles.optionText, selected === item.name && styles.optionTextSelected]}>
+                      {item.name}
+                    </Text>
+                  </Pressable>
+                  
+                  <View style={styles.itemActions}>
+                    <Pressable 
+                      style={styles.likeButton}
+                      onPress={() => onLike && onLike(item.name)}
+                    >
+                      <Heart 
+                        color={Colors.dark.accent} 
+                        size={14} 
+                        fill={Colors.dark.accent} 
+                        style={{ opacity: 0.8 }}
+                      />
+                      <Text style={styles.likeCount}>{item.likes || 0}</Text>
+                    </Pressable>
+                    {selected === item.name && <View style={styles.selectedDot} />}
+                  </View>
+                </View>
               )}
             />
           </Pressable>
@@ -187,17 +214,42 @@ const styles = StyleSheet.create({
   addButtonDisabled: {
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
-  optionItem: {
+  optionItemContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 24,
+    paddingVertical: 4,
+    paddingHorizontal: 16,
     marginHorizontal: 16,
+    marginVertical: 4,
     borderRadius: 12,
   },
   optionItemSelected: {
     backgroundColor: 'rgba(0, 255, 102, 0.1)',
+  },
+  optionItem: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+  },
+  itemActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  likeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    gap: 6,
+  },
+  likeCount: {
+    color: Colors.dark.accent,
+    fontSize: 12,
+    fontWeight: '800',
   },
   optionText: {
     color: '#A1A1AA',

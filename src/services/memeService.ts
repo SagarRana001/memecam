@@ -33,6 +33,7 @@ const base64ToArrayBuffer = (base64: string) => {
 export interface MemeData {
   user_id: string;
   image_url: string;
+  raw_image_url?: string;
   caption: string;
   metadata?: {
     style?: string;
@@ -100,6 +101,7 @@ export const saveMemeToDb = async (meme: MemeData) => {
       {
         user_id: meme.user_id,
         image_url: meme.image_url,
+        raw_image_url: meme.raw_image_url,
         caption: meme.caption,
         top_lines: meme.metadata?.topLines,
         bottom_lines: meme.metadata?.bottomLines,

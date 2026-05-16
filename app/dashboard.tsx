@@ -101,7 +101,8 @@ export default function DashboardScreen() {
             bottomLines: m.bottom_lines,
             createdAt: new Date(m.created_at).getTime(),
             style: m.style,
-            language: m.language
+            language: m.language,
+            rawUrl: m.raw_image_url
           }));
 
           setMemes(transformed);
@@ -184,6 +185,7 @@ export default function DashboardScreen() {
             bottom: item.bottomLines ? JSON.stringify(item.bottomLines) : undefined,
             style: item.style,
             language: item.language,
+            rawUrl: item.rawUrl,
             isNew: 'false'
           }
         })}

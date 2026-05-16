@@ -135,3 +135,6 @@ INSERT INTO public.app_styles (name) VALUES
 ('Funny'), ('Dark'), ('Roast'), ('Cute')
 ON CONFLICT (name) DO NOTHING;
 
+ALTER TABLE public.app_languages ADD COLUMN likes INTEGER DEFAULT 0;
+ALTER TABLE public.app_styles ADD COLUMN likes INTEGER DEFAULT 0;
+ALTER TABLE public.memes ADD COLUMN raw_image_url TEXT;

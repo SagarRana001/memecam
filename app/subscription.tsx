@@ -294,7 +294,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 12,
+    paddingHorizontal: 24,
   },
   premiumBadgeText: {
     color: '#000',
