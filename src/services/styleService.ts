@@ -64,12 +64,13 @@ export const addStyleToDb = async (name: string): Promise<boolean> => {
  */
 export const likeStyle = async (name: string): Promise<void> => {
   try {
-    const { data, error } = await supabase
+    const { error } = await supabase
       .rpc('increment_style_likes', { style_name: name });
     
     if (error) {
-      // Fallback
-      const { data: current } = await supabase
+      console.warn('RPC missing, falling back to manual increment:', error.message);
+      // Fallback: Fetch current likes then increment
+      const { data } = await supabase
         .from('app_styles')
         .select('likes')
         .eq('name', name)
@@ -77,7 +78,7 @@ export const likeStyle = async (name: string): Promise<void> => {
       
       await supabase
         .from('app_styles')
-        .update({ likes: (current?.likes || 0) + 1 })
+        .update({ likes: (data?.likes || 0) + 1 })
         .eq('name', name);
     }
   } catch (err) {

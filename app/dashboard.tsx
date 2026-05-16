@@ -214,8 +214,8 @@ export default function DashboardScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>
+        <View style={{ flex: 1, marginRight: 16 }}>
+          <Text style={styles.greeting} numberOfLines={2} ellipsizeMode="tail">
             {profile?.full_name ? `HI, ${profile.full_name.toUpperCase()}` : 'FIRE LAB 🔥'}
           </Text>
           <Text style={styles.subtitle}>Your Daily Spark</Text>

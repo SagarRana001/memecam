@@ -138,3 +138,24 @@ ON CONFLICT (name) DO NOTHING;
 ALTER TABLE public.app_languages ADD COLUMN likes INTEGER DEFAULT 0;
 ALTER TABLE public.app_styles ADD COLUMN likes INTEGER DEFAULT 0;
 ALTER TABLE public.memes ADD COLUMN raw_image_url TEXT;
+
+
+-- 1. Create RPC for incrementing language likes
+CREATE OR REPLACE FUNCTION public.increment_language_likes(lang_name TEXT)
+RETURNS void AS $$
+BEGIN
+  UPDATE public.app_languages
+  SET likes = COALESCE(likes, 0) + 1
+  WHERE name = lang_name;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 2. Create RPC for incrementing style likes
+CREATE OR REPLACE FUNCTION public.increment_style_likes(style_name TEXT)
+RETURNS void AS $$
+BEGIN
+  UPDATE public.app_styles
+  SET likes = COALESCE(likes, 0) + 1
+  WHERE name = style_name;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -4,6 +4,7 @@ import { X, Plus, Heart } from 'lucide-react-native';
 import { Colors } from '@/constants/theme';
 import { useAlert } from '../context/AlertContext';
 import { SelectionOption } from '../services/languageService';
+import { formatTitleCase } from '../utils/stringUtils';
 
 interface SelectionModalProps {
   visible: boolean;
@@ -44,8 +45,8 @@ export function SelectionModal({
     const cleaned = text.replace(/[0-9]/g, '');
     
     if (cleaned.length > 0) {
-      // First letter capital, rest small
-      const formatted = cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+      // First letter capital, rest small (using our new utility)
+      const formatted = formatTitleCase(cleaned);
       setSearchQuery(formatted);
     } else {
       setSearchQuery('');
@@ -53,10 +54,11 @@ export function SelectionModal({
   };
 
   const handleAdd = () => {
-    const trimmedValue = searchQuery.trim();
-    if (trimmedValue && onAdd) {
+    // Ensure the value is formatted before processing
+    const formattedValue = formatTitleCase(searchQuery);
+    if (formattedValue && onAdd) {
       // Check if exact match already exists
-      const existingMatch = options.find(o => o.name.toLowerCase() === trimmedValue.toLowerCase());
+      const existingMatch = options.find(o => o.name.toLowerCase() === formattedValue.toLowerCase());
       if (existingMatch) {
         showAlert({
           title: 'Duplicate',
@@ -68,7 +70,7 @@ export function SelectionModal({
       }
 
       // Requirement: Remove the prompt and add immediately
-      onAdd(trimmedValue);
+      onAdd(formattedValue);
       setSearchQuery('');
     }
   };

@@ -10,6 +10,7 @@ import { getLanguages, addLanguageToDb, SelectionOption, likeLanguage } from '@/
 import { getStyles, addStyleToDb, likeStyle } from '@/src/services/styleService';
 import storage from '@/src/utils/storage';
 import { processMemeImage } from '@/src/utils/imageProcessor';
+import { formatTitleCase } from '@/src/utils/stringUtils';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -96,15 +97,16 @@ export default function GeneratorScreen() {
 
   const handleAddLanguage = async (newLang: string) => {
     if (!newLang) return;
+    const formattedLang = formatTitleCase(newLang);
     // Optimistic update
-    if (!languagesList.some(l => l.name === newLang)) {
-      setLanguagesList(prev => [...prev, { name: newLang, likes: 1 }]);
+    if (!languagesList.some(l => l.name === formattedLang)) {
+      setLanguagesList(prev => [...prev, { name: formattedLang, likes: 1 }]);
     }
-    handleLanguageSelect(newLang);
+    handleLanguageSelect(formattedLang);
     setShowLanguageModal(false);
     
     // Save to DB
-    await addLanguageToDb(newLang);
+    await addLanguageToDb(formattedLang);
   };
 
   const handleLikeLanguage = async (lang: string) => {
@@ -123,15 +125,16 @@ export default function GeneratorScreen() {
 
   const handleAddStyle = async (newStyle: string) => {
     if (!newStyle) return;
+    const formattedStyle = formatTitleCase(newStyle);
     // Optimistic update
-    if (!stylesList.some(s => s.name === newStyle)) {
-      setStylesList(prev => [...prev, { name: newStyle, likes: 1 }]);
+    if (!stylesList.some(s => s.name === formattedStyle)) {
+      setStylesList(prev => [...prev, { name: formattedStyle, likes: 1 }]);
     }
-    handleStyleSelect(newStyle);
+    handleStyleSelect(formattedStyle);
     setShowStyleModal(false);
     
     // Save to DB
-    await addStyleToDb(newStyle);
+    await addStyleToDb(formattedStyle);
   };
 
   useFocusEffect(
@@ -364,11 +367,11 @@ export default function GeneratorScreen() {
           </Pressable>
           <View style={styles.dropdowns}>
             <Pressable onPress={() => setShowStyleModal(true)} style={styles.dropdown}>
-              <Text style={styles.dropdownText}>{style}</Text>
+              <Text style={styles.dropdownText} numberOfLines={1} ellipsizeMode="tail">{style}</Text>
               <ChevronDown color={Colors.dark.accent} size={16} />
             </Pressable>
             <Pressable onPress={() => setShowLanguageModal(true)} style={styles.dropdown}>
-              <Text style={styles.dropdownText}>{language}</Text>
+              <Text style={styles.dropdownText} numberOfLines={1} ellipsizeMode="tail">{language}</Text>
               <ChevronDown color={Colors.dark.accent} size={16} />
             </Pressable>
           </View>
@@ -553,6 +556,9 @@ const styles = StyleSheet.create({
   dropdowns: {
     flexDirection: 'row',
     gap: 12,
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
   },
   dropdown: {
     flexDirection: 'row',
@@ -564,6 +570,7 @@ const styles = StyleSheet.create({
     gap: 4,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
+    maxWidth: '45%',
   },
   dropdownText: {
     color: '#FFF',

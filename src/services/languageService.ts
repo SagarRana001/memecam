@@ -69,14 +69,13 @@ export const addLanguageToDb = async (name: string): Promise<boolean> => {
  */
 export const likeLanguage = async (name: string): Promise<void> => {
   try {
-    // Use a RPC call or a manual increment
-    // Since we don't have a specific RPC, we'll do a fetch-then-update or use Supabase's increment
-    const { data, error } = await supabase
+    const { error } = await supabase
       .rpc('increment_language_likes', { lang_name: name });
     
     if (error) {
-      // Fallback if RPC doesn't exist: fetch and update
-      const { data: current } = await supabase
+      console.warn('RPC missing, falling back to manual increment:', error.message);
+      // Fallback: Fetch current likes then increment
+      const { data } = await supabase
         .from('app_languages')
         .select('likes')
         .eq('name', name)
@@ -84,7 +83,7 @@ export const likeLanguage = async (name: string): Promise<void> => {
       
       await supabase
         .from('app_languages')
-        .update({ likes: (current?.likes || 0) + 1 })
+        .update({ likes: (data?.likes || 0) + 1 })
         .eq('name', name);
     }
   } catch (err) {

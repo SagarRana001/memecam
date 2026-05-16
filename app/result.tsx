@@ -22,6 +22,7 @@ import { ChevronDown } from 'lucide-react-native';
 import { useEffect } from 'react';
 import { getLanguages, addLanguageToDb, SelectionOption, likeLanguage } from '@/src/services/languageService';
 import storage from '@/src/utils/storage';
+import { formatTitleCase } from '@/src/utils/stringUtils';
 
 
 
@@ -185,15 +186,16 @@ export default function ResultScreen() {
 
   const handleAddLanguage = async (newLang: string) => {
     if (!newLang) return;
+    const formattedLang = formatTitleCase(newLang);
     // Optimistic update
-    if (!languagesList.includes(newLang)) {
-      setLanguagesList(prev => [...prev, newLang]);
+    if (!languagesList.some(l => l.name === formattedLang)) {
+      setLanguagesList(prev => [...prev, { name: formattedLang, likes: 1 }]);
     }
-    handleLanguageSelect(newLang);
+    handleLanguageSelect(formattedLang);
     setShowLanguageModal(false);
     
     // Save to DB
-    await addLanguageToDb(newLang);
+    await addLanguageToDb(formattedLang);
   };
 
   // Automatic Cloud Upload: Every generation and reload is synced to the lab.
@@ -366,11 +368,11 @@ export default function ResultScreen() {
         
         <View style={styles.dropdowns}>
           <Pressable onPress={() => setShowStyleModal(true)} style={styles.dropdown}>
-            <Text style={styles.dropdownText}>{currentStyle}</Text>
+            <Text style={styles.dropdownText} numberOfLines={1} ellipsizeMode="tail">{currentStyle}</Text>
             <ChevronDown color={Colors.dark.accent} size={16} />
           </Pressable>
           <Pressable onPress={() => setShowLanguageModal(true)} style={styles.dropdown}>
-            <Text style={styles.dropdownText}>{currentLanguage}</Text>
+            <Text style={styles.dropdownText} numberOfLines={1} ellipsizeMode="tail">{currentLanguage}</Text>
             <ChevronDown color={Colors.dark.accent} size={16} />
           </Pressable>
         </View>
@@ -536,6 +538,9 @@ const styles = StyleSheet.create({
   dropdowns: {
     flexDirection: 'row',
     gap: 8,
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
   },
   dropdown: {
     flexDirection: 'row',
@@ -547,6 +552,7 @@ const styles = StyleSheet.create({
     gap: 4,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
+    maxWidth: '48%',
   },
   dropdownText: {
     color: '#FFF',
