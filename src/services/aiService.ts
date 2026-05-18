@@ -58,13 +58,25 @@ export const generateMemeLines = async (
   }
 
   // 2. Prepare the prompt
-  const styleDescription = style === 'Roast'
-    ? 'Absolutely savage, brutal, unapologetic roast. Destroy the subject of this image with words. High-energy, viral internet-style mockery.'
-    : style === 'Dark'
-      ? 'Extremely edgy, cynical, bleak, and unhinged dark humor. The kind of joke you feel bad for laughing at. Uncomfortable but hilarious.'
-      : style === 'Cute'
-        ? 'Overwhelmingly wholesome, sweet, adorable, and pure. Soft, squishy internet-animal text style (e.g., "smol", "heckin"). Makes you go "aww".'
-        : 'Hilarious, incredibly relatable, highly viral internet meme humor. Clever, absurd, and punchy.';
+  let styleDescription = '';
+  const normalizedStyle = style.trim().toLowerCase();
+
+  if (normalizedStyle === 'roast') {
+    styleDescription = 'Absolutely savage, brutal, and unapologetic roast. Completely destroy the subject of this image with words. High-energy, viral, internet-style mockery and extreme burns.';
+  } else if (normalizedStyle === 'dark') {
+    styleDescription = 'Extremely edgy, cynical, bleak, and unhinged dark humor. The kind of joke you feel bad for laughing at. Uncomfortable, twisted, and shockingly hilarious.';
+  } else if (normalizedStyle === 'cute') {
+    styleDescription = 'Overwhelmingly wholesome, sweet, adorable, and pure. Soft, squishy internet-animal text style (e.g., "smol", "heckin", "chonky", "floof"). Makes you go "aww".';
+  } else if (normalizedStyle === 'funny') {
+    styleDescription = 'Exceedingly hilarious, side-splittingly funny, and deeply relatable modern internet humor. Rely on clever irony, high-level sarcasm, absurdity, and extremely punchy jokes. Make it genuinely laugh-out-loud funny, avoiding dry, cliché, or simple descriptive captions.';
+  } else if (normalizedStyle === 'sad' || normalizedStyle === 'depressing') {
+    styleDescription = 'Deeply dramatic, existential dread, tragicomic, self-deprecating, and "crying in the club" energy. Melodramatic, touching, and hilariously sad. Focus on existential crisis, low motivation, or absolute defeat in a funny, highly relatable way.';
+  } else if (normalizedStyle === 'kinky' || normalizedStyle === 'spicy' || normalizedStyle === 'flirty') {
+    styleDescription = 'Playful, highly suggestive, cheeky, and spicy relationship or flirty humor. Focus on clever double-entendres, high-tension flirty vibes, and being "down bad". Keep it strictly safe for work (SFW) in terms of direct vocabulary so it does NOT trigger safety/moderation filters (absolutely no explicit anatomical, crude, or sexual words), but make the innuendo and suggestive context hilariously clear and witty.';
+  } else {
+    // Dynamic fallback description for custom styles added by the community
+    styleDescription = `Capture the absolute essence of "${style}" style. Tailor the captions to perfectly embody the tone, attitude, humor, and vibe of "${style}" in a highly viral, internet-native meme format.`;
+  }
 
   const languageInstruction = language === 'Hinglish'
     ? 'Write the captions specifically in Hinglish (Hindi written in Roman/English script, e.g., "bhai kya kar raha hai"). Make it sound natural and colloquial.'
@@ -81,7 +93,9 @@ export const generateMemeLines = async (
     Rules:
     - Don't be boring. Go all-in on the requested vibe.
     - Keep it internet-authentic. Use meme phrasing where appropriate.
-    - You MUST provide exactly 4 VERY SHORT, concise lines (max 3-5 words per line).
+    - The top lines should build up the situation/context, and the bottom lines should deliver the hilariously unexpected or punchy punchline!
+    - Avoid just describing what is literally in the image; instead, use the visual context to create a hilarious situation or reaction!
+    - You MUST provide exactly 4 VERY SHORT, concise lines (max 3-5 words per line) so they fit perfectly on a meme image without crowding.
     - Two distinct lines for the TOP of the meme.
     - Two distinct lines for the BOTTOM of the meme.
     
