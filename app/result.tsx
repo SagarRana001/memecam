@@ -207,7 +207,7 @@ export default function ResultScreen() {
       // Safety Limit Check: Don't increment if already over limit (unless premium)
       if (!isPremium) {
         const count = await getUserMemeCount(user.id);
-        if (count >= 3) {
+        if (count >= 30) {
           console.log('Auto-upload skipped: Limit reached');
           setShouldAutoSave(false);
           return;

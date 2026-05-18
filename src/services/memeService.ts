@@ -189,7 +189,7 @@ export const getUserMemeCount = async (userId: string): Promise<number> => {
 };
 
 /**
- * Returns the number of memes remaining for the day (max 3 for free users)
+ * Returns the number of memes remaining for the day (max 30 for free users)
  */
 export const getRemainingMemesCount = async (userId: string): Promise<{ remaining: number, total: number, isPremium: boolean }> => {
   try {
@@ -198,13 +198,13 @@ export const getRemainingMemesCount = async (userId: string): Promise<{ remainin
     
     const count = profile.memes_generated_today || 0;
     return { 
-      remaining: Math.max(0, 3 - count), 
-      total: 3,
+      remaining: Math.max(0, 30 - count), 
+      total: 30,
       isPremium: false 
     };
   } catch (error) {
     // Failed to get remaining count
-    return { remaining: 0, total: 3, isPremium: false };
+    return { remaining: 0, total: 30, isPremium: false };
   }
 };
 

@@ -5,7 +5,7 @@ The Memecam.in project aims to provide a fast, AI-powered meme generation experi
 
 ## 2. Business Objectives
 - **User Growth**: Achieve high virality through easy "Share" functionality.
-- **Monetization**: Convert free users to paid subscribers using a daily usage cap (3 memes/day).
+- **Monetization**: Convert free users to paid subscribers using a daily usage cap (30 memes/day).
 - **Efficiency**: Minimize infrastructure costs by compressing images (256x256) before AI processing.
 - **Brand Identity**: Ensure brand visibility via watermarks on all generated memes.
 
@@ -17,7 +17,7 @@ The Memecam.in project aims to provide a fast, AI-powered meme generation experi
 ## 4. Key Business Requirements (KBR)
 | ID | Requirement | Description | Priority |
 |---|---|---|---|
-| KBR-1 | Freemium Model | Users get 3 free generations per day. | High |
+| KBR-1 | Freemium Model | Users get 30 free generations per day. | High |
 | KBR-2 | Google Auth | Required for tracking usage caps and managing subscriptions. | High |
 | KBR-3 | Direct Monetization | Integration with Google Play Billing for subscriptions. | High |
 | KBR-4 | Viral Sharing | One-tap sharing to platform-specific app drawers. | Medium |

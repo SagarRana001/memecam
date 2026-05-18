@@ -18,12 +18,12 @@ The application must strictly follow the logic defined in the **Action Diagram**
     - **Logout**: Securely sign out and clear local session state.
     - **Delete Account**: Permanent deletion of user record and revocable access from Google.
 - **Subscription States**:
-    - **Guest**: 3 free memes/day (Local storage/IP tracking).
+    - **Guest**: 30 free memes/day (Local storage/IP tracking).
     - **Subscriber**: Unlimited memes, no watermark.
 
 ### 3.2 Meme Generation Flow
 1. **Trigger**: User clicks "Pic" on Landing.
-2. **Limit Check**: Verify if user has generated `< 3` memes today.
+2. **Limit Check**: Verify if user has generated `< 30` memes today.
 3. **Happy Path (Under Limit)**:
     - **Step 1**: Crop image to square format.
     - **Step 2**: Compress to `256 x 256` for faster upload/processing.

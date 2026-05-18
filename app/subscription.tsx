@@ -1,7 +1,7 @@
 import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
 import { useRouter } from 'expo-router';
-import { Check, Crown, LogOut, Menu, Trash2, X } from 'lucide-react-native';
+import { Check, Crown, LogOut, Menu, X } from 'lucide-react-native';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +9,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAlert } from '@/src/context/AlertContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useBilling } from '@/src/context/BillingContext';
-import { deleteUserAccount } from '@/src/services/authService';
 
 export default function SubscriptionScreen() {
   const router = useRouter();
@@ -28,24 +27,6 @@ export default function SubscriptionScreen() {
       type: 'info',
       buttons: [
         { text: 'Sign Out', style: 'default', onPress: signOut },
-        {
-          text: 'Delete Account',
-          style: 'destructive',
-          onPress: () => {
-            // Re-confirm for safety
-            setTimeout(() => {
-              showAlert({
-                title: 'Are you sure?',
-                message: 'This will extinguish all your fire forever. This action cannot be undone.',
-                type: 'error',
-                buttons: [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete Forever', style: 'destructive', onPress: signOut }
-                ]
-              });
-            }, 500);
-          }
-        },
         { text: 'Cancel', style: 'cancel' }
       ]
     });
@@ -63,43 +44,6 @@ export default function SubscriptionScreen() {
     });
   };
 
-  const handleDelete = () => {
-    showAlert({
-      title: 'Delete Account',
-      message: 'This is permanent and will extinguish all your fire forever. Are you absolutely sure?',
-      type: 'error',
-      buttons: [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Permanently', style: 'destructive', onPress: async () => {
-            try {
-              if (user?.id) {
-                await deleteUserAccount(user.id);
-
-                showAlert({
-                  title: 'Account Deleted',
-                  message: 'Your fire has been extinguished. Redirecting...',
-                  type: 'success',
-                });
-
-                // Allow user to see the success message briefly
-                setTimeout(async () => {
-                  await signOut();
-                  router.replace('/');
-                }, 2000);
-              }
-            } catch (err: any) {
-              showAlert({
-                title: 'Deletion Failed',
-                message: err.message || 'The lab failed to purge your data. 🔥',
-                type: 'error'
-              });
-            }
-          }
-        },
-      ]
-    });
-  };
 
   const handleCancelSubscription = () => {
     const url = Platform.select({
@@ -180,11 +124,6 @@ export default function SubscriptionScreen() {
             <Pressable style={styles.iconAction} onPress={handleLogout}>
               <LogOut color={Colors.dark.muted} size={20} />
               <Text style={styles.iconActionText}>Logout</Text>
-            </Pressable>
-            <View style={styles.separator} />
-            <Pressable style={styles.iconAction} onPress={handleDelete}>
-              <Trash2 color={Colors.dark.danger} size={20} />
-              <Text style={[styles.iconActionText, { color: Colors.dark.danger }]}>Delete Account</Text>
             </Pressable>
           </View>
         </Animated.View>

@@ -52,7 +52,7 @@ export default function GeneratorScreen() {
     if (!user) return;
     try {
       const count = await getUserMemeCount(user.id);
-      setIsOverLimit(!isPremium && count >= 3);
+      setIsOverLimit(!isPremium && count >= 30);
     } catch (err) {
       // Limit check failed
     } finally {
@@ -223,10 +223,10 @@ export default function GeneratorScreen() {
       // 3. --- RATE LIMIT CHECK ---
       if (user) {
         const count = await getUserMemeCount(user.id);
-        if (!isPremium && count >= 3) {
+        if (!isPremium && count >= 30) {
           showAlert({
             title: 'Limit Reached',
-            message: 'You have used your 3 free memes. Upgrade to Premium for more fire! 🔥',
+            message: 'You have used your 30 free memes. Upgrade to Premium for more fire! 🔥',
             type: 'warning',
             buttons: [
               { text: 'Later', style: 'cancel' },
@@ -298,10 +298,10 @@ export default function GeneratorScreen() {
         // --- RATE LIMIT CHECK ---
         if (user) {
           const count = await getUserMemeCount(user.id);
-          if (!isPremium && count >= 3) {
+          if (!isPremium && count >= 30) {
             showAlert({
               title: 'Limit Reached',
-              message: 'You have used your 3 free memes. Upgrade to Premium for unlimited fire! 🔥',
+              message: 'You have used your 30 free memes. Upgrade to Premium for unlimited fire! 🔥',
               type: 'warning',
               buttons: [
                 { text: 'Later', style: 'cancel' },
@@ -419,7 +419,7 @@ export default function GeneratorScreen() {
               <Crown color={Colors.dark.accent} size={64} fill={Colors.dark.accent} />
               <Text style={styles.limitTitle}>LIMIT REACHED</Text>
               <Text style={styles.limitText}>
-                You've used your 3 free sparks for today. Upgrade to Premium for unlimited fire! 🔥
+                You've used your 30 free sparks for today. Upgrade to Premium for unlimited fire! 🔥
               </Text>
               <AnimatedButton
                 title="UPGRADE TO PREMIUM"

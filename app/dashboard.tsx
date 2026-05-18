@@ -135,24 +135,6 @@ export default function DashboardScreen() {
       type: 'info',
       buttons: [
         { text: 'Sign Out', style: 'default', onPress: signOut },
-        { 
-          text: 'Delete Account', 
-          style: 'destructive', 
-          onPress: () => {
-            // Re-confirm for safety
-            setTimeout(() => {
-              showAlert({
-                title: 'Are you sure?',
-                message: 'This will extinguish all your fire forever. This action cannot be undone.',
-                type: 'error',
-                buttons: [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete Forever', style: 'destructive', onPress: signOut }
-                ]
-              });
-            }, 500);
-          } 
-        },
         { text: 'Cancel', style: 'cancel' }
       ]
     });

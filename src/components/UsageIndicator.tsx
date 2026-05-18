@@ -1,10 +1,10 @@
 import { Colors } from '@/constants/theme';
-import { getRemainingMemesCount } from '@/src/services/memeService';
 import { useAuth } from '@/src/context/AuthContext';
+import { useBilling } from '@/src/context/BillingContext';
+import { getRemainingMemesCount } from '@/src/services/memeService';
 import { Crown, Flame } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, Text, View, ActivityIndicator } from 'react-native';
-import { useBilling } from '@/src/context/BillingContext';
+import { StyleSheet, Text, View } from 'react-native';
 
 export function UsageIndicator() {
   const { user } = useAuth();
@@ -40,7 +40,7 @@ export function UsageIndicator() {
     <View style={styles.container}>
       <Flame color={isLow ? Colors.dark.danger : Colors.dark.accent} size={16} />
       <Text style={[styles.text, isLow && styles.lowText]}>
-        {data?.remaining} OF {data?.total} FREE MEMES LEFT
+        {data?.remaining} OF {data?.total} FREE DAILY MEMES LEFT
       </Text>
     </View>
   );
