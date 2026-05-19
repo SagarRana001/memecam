@@ -1,13 +1,13 @@
 import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
 import { SelectionModal } from '@/src/components/SelectionModal';
+import { ZoomSlider } from '@/src/components/ZoomSlider';
 import { useAlert } from '@/src/context/AlertContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useBilling } from '@/src/context/BillingContext';
 import { generateMemeLines } from '@/src/services/aiService';
 import { getUserMemeCount } from '@/src/services/memeService';
-import { getLanguages, addLanguageToDb, SelectionOption, likeLanguage } from '@/src/services/languageService';
-import { getStyles, addStyleToDb, likeStyle } from '@/src/services/styleService';
+import { useMemeOptions } from '@/src/hooks/useMemeOptions';
 import storage from '@/src/utils/storage';
 import { processMemeImage } from '@/src/utils/imageProcessor';
 import { formatTitleCase } from '@/src/utils/stringUtils';
@@ -18,8 +18,9 @@ import { ChevronDown, Crown, ImagePlus, RotateCcw, X } from 'lucide-react-native
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, runOnJS, useSharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 
 export default function GeneratorScreen() {
@@ -31,6 +32,8 @@ export default function GeneratorScreen() {
 
   const cameraRef = useRef<CameraView>(null);
   const [facing, setFacing] = useState<'back' | 'front'>('back');
+  const [zoom, setZoom] = useState(0);
+  const currentZoom = useSharedValue(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -45,8 +48,14 @@ export default function GeneratorScreen() {
   const { isPremium } = useBilling();
 
 
-  const [stylesList, setStylesList] = useState<SelectionOption[]>([]);
-  const [languagesList, setLanguagesList] = useState<SelectionOption[]>([]);
+  const {
+    stylesList,
+    languagesList,
+    handleAddLanguage,
+    handleLikeLanguage,
+    handleAddStyle,
+    handleLikeStyle
+  } = useMemeOptions();
 
   const checkLimit = useCallback(async () => {
     if (!user) return;
@@ -65,24 +74,16 @@ export default function GeneratorScreen() {
   }, [checkLimit]);
 
   useEffect(() => {
-    const loadPreferencesAndLanguages = async () => {
+    const loadPreferences = async () => {
       // Load local preferences
       const savedLang = await storage.getItem('preferred_language');
       if (savedLang) setLanguage(savedLang);
       
       const savedStyle = await storage.getItem('preferred_style');
       if (savedStyle) setStyle(savedStyle);
-
-      // Fetch global languages
-      const fetchedLangs = await getLanguages();
-      setLanguagesList(fetchedLangs);
-
-      // Fetch global styles
-      const fetchedStyles = await getStyles();
-      setStylesList(fetchedStyles);
     };
     
-    loadPreferencesAndLanguages();
+    loadPreferences();
   }, []);
 
   const handleLanguageSelect = (lang: string) => {
@@ -95,47 +96,7 @@ export default function GeneratorScreen() {
     storage.setItem('preferred_style', selectedStyle);
   };
 
-  const handleAddLanguage = async (newLang: string) => {
-    if (!newLang) return;
-    const formattedLang = formatTitleCase(newLang);
-    // Optimistic update
-    if (!languagesList.some(l => l.name === formattedLang)) {
-      setLanguagesList(prev => [...prev, { name: formattedLang, likes: 1 }]);
-    }
-    handleLanguageSelect(formattedLang);
-    setShowLanguageModal(false);
-    
-    // Save to DB
-    await addLanguageToDb(formattedLang);
-  };
 
-  const handleLikeLanguage = async (lang: string) => {
-    setLanguagesList(prev => prev.map(l => 
-      l.name === lang ? { ...l, likes: (l.likes || 0) + 1 } : l
-    ));
-    await likeLanguage(lang);
-  };
-
-  const handleLikeStyle = async (styleName: string) => {
-    setStylesList(prev => prev.map(s => 
-      s.name === styleName ? { ...s, likes: (s.likes || 0) + 1 } : s
-    ));
-    await likeStyle(styleName);
-  };
-
-  const handleAddStyle = async (newStyle: string) => {
-    if (!newStyle) return;
-    const formattedStyle = formatTitleCase(newStyle);
-    // Optimistic update
-    if (!stylesList.some(s => s.name === formattedStyle)) {
-      setStylesList(prev => [...prev, { name: formattedStyle, likes: 1 }]);
-    }
-    handleStyleSelect(formattedStyle);
-    setShowStyleModal(false);
-    
-    // Save to DB
-    await addStyleToDb(formattedStyle);
-  };
 
   useFocusEffect(
     useCallback(() => {
@@ -350,6 +311,25 @@ export default function GeneratorScreen() {
 
   };
 
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      let newZoom = currentZoom.value + (e.scale - 1) * 0.5;
+      if (newZoom < 0) newZoom = 0;
+      if (newZoom > 1) newZoom = 1;
+      runOnJS(setZoom)(newZoom);
+    })
+    .onEnd((e) => {
+      let newZoom = currentZoom.value + (e.scale - 1) * 0.5;
+      if (newZoom < 0) newZoom = 0;
+      if (newZoom > 1) newZoom = 1;
+      currentZoom.value = newZoom;
+    });
+
+  const handleZoomChange = useCallback((newZoom: number) => {
+    setZoom(newZoom);
+    currentZoom.value = newZoom;
+  }, []);
+
   if (!permission) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -386,12 +366,20 @@ export default function GeneratorScreen() {
           {capturedImage ? (
             <Image source={{ uri: capturedImage }} style={styles.camera} resizeMode="cover" />
           ) : (permission.granted && isFocused) ? (
-            <CameraView
-              key={`${facing}-${isFocused}`}
-              ref={cameraRef}
-              style={styles.camera}
-              facing={facing}
-            />
+            <GestureDetector gesture={pinchGesture}>
+              <Animated.View style={styles.camera}>
+                <CameraView
+                  key={`${facing}-${isFocused}`}
+                  ref={cameraRef}
+                  style={styles.camera}
+                  facing={facing}
+                  zoom={zoom}
+                />
+                <View style={styles.sliderOverlay}>
+                  <ZoomSlider zoom={zoom} onZoomChange={handleZoomChange} />
+                </View>
+              </Animated.View>
+            </GestureDetector>
           ) : (
             <Pressable style={styles.permissionPlaceholder} onPress={ensureCameraPermission}>
               <View style={styles.permissionIconContainer}>
@@ -464,7 +452,7 @@ export default function GeneratorScreen() {
         onLike={handleLikeStyle}
         title="Enter Style"
         allowAdd={true}
-        onAdd={handleAddStyle}
+        onAdd={(newStyle) => handleAddStyle(newStyle, handleStyleSelect, () => setShowStyleModal(false))}
         addPlaceholder="Add custom style..."
       />
 
@@ -477,7 +465,7 @@ export default function GeneratorScreen() {
         onLike={handleLikeLanguage}
         title="Enter Language"
         allowAdd={true}
-        onAdd={handleAddLanguage}
+        onAdd={(newLang) => handleAddLanguage(newLang, handleLanguageSelect, () => setShowLanguageModal(false))}
         addPlaceholder="Add custom language..."
       />
     </SafeAreaView>
@@ -595,6 +583,13 @@ const styles = StyleSheet.create({
   },
   camera: {
     flex: 1,
+  },
+  sliderOverlay: {
+    position: 'absolute',
+    right: 16,
+    top: '50%',
+    marginTop: -87, // roughly half of 174px (150 height + 24 thumb)
+    zIndex: 100,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,

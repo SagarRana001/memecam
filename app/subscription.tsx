@@ -1,7 +1,7 @@
 import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
 import { useRouter } from 'expo-router';
-import { Check, Crown, LogOut, Menu, X } from 'lucide-react-native';
+import { Check, Crown, LogOut, Menu, Trash2, X } from 'lucide-react-native';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,7 +12,7 @@ import { useBilling } from '@/src/context/BillingContext';
 
 export default function SubscriptionScreen() {
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, signOut, deleteAccount } = useAuth();
   const { isPremium, subscription, products, loading, requestPurchase, restorePurchases } = useBilling();
   const { showAlert } = useAlert();
 
@@ -40,6 +40,33 @@ export default function SubscriptionScreen() {
       buttons: [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Sign Out', style: 'destructive', onPress: signOut }
+      ]
+    });
+  };
+
+  const handleDeleteAccount = () => {
+    showAlert({
+      title: 'Delete Account',
+      message: 'Are you sure you want to delete your account? This action cannot be undone and you will lose all your generated memes.',
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive', 
+          onPress: async () => {
+            try {
+              await deleteAccount();
+            } catch (error) {
+              showAlert({
+                title: 'Error',
+                message: 'Failed to delete account. Please try again.',
+                type: 'error',
+                buttons: [{ text: 'OK', style: 'default' }]
+              });
+            }
+          }
+        }
       ]
     });
   };
@@ -124,6 +151,13 @@ export default function SubscriptionScreen() {
             <Pressable style={styles.iconAction} onPress={handleLogout}>
               <LogOut color={Colors.dark.muted} size={20} />
               <Text style={styles.iconActionText}>Logout</Text>
+            </Pressable>
+
+            <View style={styles.separator} />
+
+            <Pressable style={styles.iconAction} onPress={handleDeleteAccount}>
+              <Trash2 color={Colors.dark.danger} size={20} />
+              <Text style={[styles.iconActionText, { color: Colors.dark.danger }]}>Delete Account</Text>
             </Pressable>
           </View>
         </Animated.View>

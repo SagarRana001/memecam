@@ -20,9 +20,8 @@ import { useAlert } from '@/src/context/AlertContext';
 
 import { ChevronDown } from 'lucide-react-native';
 import { useEffect } from 'react';
-import { getLanguages, addLanguageToDb, SelectionOption, likeLanguage } from '@/src/services/languageService';
+import { useMemeOptions } from '@/src/hooks/useMemeOptions';
 import storage from '@/src/utils/storage';
-import { formatTitleCase } from '@/src/utils/stringUtils';
 
 
 
@@ -63,8 +62,14 @@ export default function ResultScreen() {
 
   const [currentStyle, setCurrentStyle] = useState(initialStyle || 'Roast');
   const [currentLanguage, setCurrentLanguage] = useState(initialLanguage || 'Hinglish');
-  const [stylesList, setStylesList] = useState<SelectionOption[]>([]);
-  const [languagesList, setLanguagesList] = useState<SelectionOption[]>([]);
+  const {
+    stylesList,
+    languagesList,
+    handleAddLanguage,
+    handleLikeLanguage,
+    handleAddStyle,
+    handleLikeStyle
+  } = useMemeOptions();
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
@@ -105,40 +110,7 @@ export default function ResultScreen() {
     if (!uri) {
       // Warning: Result screen loaded without a valid image URI
     }
-    
-    // Fetch global lists
-    const fetchLists = async () => {
-      try {
-        const [langs, styles] = await Promise.all([
-          getLanguages(),
-          import('@/src/services/styleService').then(m => m.getStyles())
-        ]);
-        setLanguagesList(langs);
-        setStylesList(styles);
-      } catch (err) {
-        // Fallback handled by services
-      }
-    };
-    
-    fetchLists();
   }, [id, uri]);
-
-  const handleLikeLanguage = async (lang: string) => {
-    // Optimistic update
-    setLanguagesList(prev => prev.map(l => 
-      l.name === lang ? { ...l, likes: (l.likes || 0) + 1 } : l
-    ));
-    await likeLanguage(lang);
-  };
-
-  const handleLikeStyle = async (styleName: string) => {
-    // Optimistic update
-    setStylesList(prev => prev.map(s => 
-      s.name === styleName ? { ...s, likes: (s.likes || 0) + 1 } : s
-    ));
-    const { likeStyle } = await import('@/src/services/styleService');
-    await likeStyle(styleName);
-  };
 
   const handleLanguageSelect = (lang: string) => {
     setCurrentLanguage(lang);
@@ -184,19 +156,7 @@ export default function ResultScreen() {
     }
   };
 
-  const handleAddLanguage = async (newLang: string) => {
-    if (!newLang) return;
-    const formattedLang = formatTitleCase(newLang);
-    // Optimistic update
-    if (!languagesList.some(l => l.name === formattedLang)) {
-      setLanguagesList(prev => [...prev, { name: formattedLang, likes: 1 }]);
-    }
-    handleLanguageSelect(formattedLang);
-    setShowLanguageModal(false);
-    
-    // Save to DB
-    await addLanguageToDb(formattedLang);
-  };
+
 
   // Automatic Cloud Upload: Every generation and reload is synced to the lab.
 
@@ -454,7 +414,7 @@ export default function ResultScreen() {
               </View>
             )}
 
-            {(isReallyNew || isEditing) && !isPremium && (
+            {(isReallyNew || isEditing || (isFromDashboard && !!rawUrl)) && !isPremium && (
               <View style={styles.diagonalWatermark} pointerEvents="none">
                 <Text style={styles.diagonalText}>Memecam.in</Text>
               </View>
@@ -489,7 +449,10 @@ export default function ResultScreen() {
         selected={currentStyle}
         onSelect={handleStyleSelect}
         onLike={handleLikeStyle}
-        title="SELECT STYLE"
+        title="Enter Style"
+        allowAdd={true}
+        onAdd={(newStyle) => handleAddStyle(newStyle, handleStyleSelect, () => setShowStyleModal(false))}
+        addPlaceholder="Add custom style..."
       />
 
       <SelectionModal 
@@ -499,9 +462,9 @@ export default function ResultScreen() {
         selected={currentLanguage}
         onSelect={handleLanguageSelect}
         onLike={handleLikeLanguage}
-        title="SELECT LANGUAGE"
+        title="Enter Language"
         allowAdd={true}
-        onAdd={handleAddLanguage}
+        onAdd={(newLang) => handleAddLanguage(newLang, handleLanguageSelect, () => setShowLanguageModal(false))}
         addPlaceholder="Add custom language..."
       />
     </SafeAreaView>
@@ -537,27 +500,27 @@ const styles = StyleSheet.create({
   },
   dropdowns: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 12,
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
   },
   dropdown: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.05)',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
     gap: 4,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    maxWidth: '48%',
+    maxWidth: '45%',
   },
   dropdownText: {
     color: '#FFF',
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
   },
   content: {
     flex: 1,

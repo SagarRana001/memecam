@@ -159,3 +159,11 @@ BEGIN
   WHERE name = style_name;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 3. Create RPC for user to delete their own account
+CREATE OR REPLACE FUNCTION public.delete_user()
+RETURNS void AS $$
+BEGIN
+  DELETE FROM auth.users WHERE id = auth.uid();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
