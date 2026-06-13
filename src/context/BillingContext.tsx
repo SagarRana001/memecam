@@ -65,15 +65,28 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
   useEffect(() => {
     const initIAP = async () => {
       try {
-        await initConnection();
+        const connected = await initConnection();
+        if (!connected) {
+          console.log("Billing client not ready. Running in free model.");
+          setLoading(false);
+          return;
+        }
 
-        const getSubs = await fetchProducts({ skus: itemSkus, type: 'subs' });
-        setProducts(getSubs as Product[] || []);
+        try {
+          const getSubs = await fetchProducts({ skus: itemSkus, type: 'subs' });
+          setProducts(getSubs as Product[] || []);
+        } catch (prodErr) {
+          console.log("Failed to fetch products, running in free model:", prodErr);
+        }
 
-        // Check for existing purchases (Restore)
-        await checkCurrentPurchases();
+        try {
+          // Check for existing purchases (Restore)
+          await checkCurrentPurchases();
+        } catch (purchErr) {
+          console.log("Failed to check current purchases:", purchErr);
+        }
       } catch (err) {
-        // Initialization error handled silently or via state
+        console.log("Billing client failed to initialize. Running in free model:", err);
       } finally {
         setLoading(false);
       }
@@ -82,7 +95,7 @@ export const BillingProvider = ({ children }: { children: React.ReactNode }) => 
     initIAP();
 
     return () => {
-      endConnection();
+      endConnection().catch(() => {});
     };
   }, []);
 

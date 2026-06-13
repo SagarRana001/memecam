@@ -272,8 +272,8 @@ export default function ResultScreen() {
     try {
       setIsSaving(true);
 
-      // 1. Request permissions
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      // 1. Request permissions (writeOnly = true to avoid music/video prompts)
+      const { status } = await MediaLibrary.requestPermissionsAsync(true);
       if (status !== 'granted') {
         showAlert({
           title: 'Permission Needed',

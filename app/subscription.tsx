@@ -18,7 +18,7 @@ export default function SubscriptionScreen() {
 
   const premiumProduct = products.find(p => p.id === 'memecam_premium_monthly');
 
-  const priceLabel = '7-DAY FREE TRIAL • THEN ₹799INR/mo';
+  const priceLabel = 'Subscription for ₹799INR/mo';
 
   const handleAccountMenu = () => {
     showAlert({
@@ -51,9 +51,9 @@ export default function SubscriptionScreen() {
       type: 'warning',
       buttons: [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive', 
+        {
+          text: 'Delete',
+          style: 'destructive',
           onPress: async () => {
             try {
               await deleteAccount();
@@ -139,8 +139,8 @@ export default function SubscriptionScreen() {
             </View>
           )}
 
-          <Pressable 
-            onPress={restorePurchases} 
+          <Pressable
+            onPress={restorePurchases}
             style={styles.secondaryActions}
             disabled={loading}
           >
