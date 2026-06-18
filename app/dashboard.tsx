@@ -3,7 +3,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { getUserMemes, getUserProfile } from '@/src/services/memeService';
 import { getMemeHistory, MemeItem } from '@/src/utils/historyManager';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { AlertTriangle, ChevronRight, Image as ImageIcon, Menu, Plus, RotateCcw, Search, X, Zap } from 'lucide-react-native';
+import { AlertTriangle, ChevronRight, Image as ImageIcon, Menu, Plus, RotateCcw, Search, X, Zap, MessageSquare } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
@@ -12,6 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useBilling } from '@/src/context/BillingContext';
 import { useAlert } from '@/src/context/AlertContext';
 import { UsageIndicator } from '@/src/components/UsageIndicator';
+import { FeedbackModal } from '@/src/components/FeedbackModal';
 
 
 const { width } = Dimensions.get('window');
@@ -35,6 +36,7 @@ export default function DashboardScreen() {
   const [memeCount, setMemeCount] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
 
   const { user, signOut } = useAuth();
@@ -202,8 +204,14 @@ export default function DashboardScreen() {
           </Text>
           <Text style={styles.subtitle}>Your Daily Spark</Text>
         </View>
-        <Pressable style={styles.profileButton} onPress={handleAccountMenu}>
-          <Menu color="#FFF" size={24} />
+        <Pressable 
+          style={styles.feedbackButton} 
+          onPress={() => setShowFeedbackModal(true)}
+          onLongPress={handleAccountMenu}
+          delayLongPress={800}
+        >
+          <Text style={styles.feedbackButtonText}>Feedback</Text>
+          <MessageSquare color={Colors.dark.accent} size={16} />
         </Pressable>
       </View>
 
@@ -336,6 +344,13 @@ export default function DashboardScreen() {
           <Text style={styles.fabText}>NEW</Text>
         </Pressable>
       </Animated.View>
+
+      {/* Feedback Modal */}
+      <FeedbackModal
+        visible={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+        userId={user?.id}
+      />
     </SafeAreaView>
   );
 }
@@ -377,6 +392,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
+  },
+  feedbackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: Colors.dark.accent,
+  },
+  feedbackButtonText: {
+    color: Colors.dark.accent,
+    fontSize: 14,
+    fontWeight: '600',
   },
   banner: {
     marginHorizontal: 24,

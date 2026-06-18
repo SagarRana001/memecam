@@ -167,3 +167,19 @@ BEGIN
   DELETE FROM auth.users WHERE id = auth.uid();
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Create a feedback table to store user submissions
+CREATE TABLE public.feedback (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users ON DELETE SET NULL,
+  content TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable Row Level Security (RLS)
+ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
+
+-- Allow authenticated users to submit feedback
+CREATE POLICY "Authenticated users can submit feedback." ON public.feedback
+  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+

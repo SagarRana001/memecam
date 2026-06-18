@@ -283,9 +283,6 @@ export default function ResultScreen() {
         return;
       }
 
-      // 2. Small delay to ensure any animations have settled
-      await new Promise(resolve => setTimeout(resolve, 300));
-
       // 3. Capture the view
       if (!viewShotRef.current?.capture) return;
       const captureUri = await viewShotRef.current.capture();
