@@ -14,6 +14,8 @@ import { CustomAlert } from '@/src/components/CustomAlert';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { AlertTriangle, RotateCcw } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { trackSnapchatInstall } from '@/src/utils/snapchat';
 
 export function ErrorBoundary(props: ErrorBoundaryProps) {
   return (
@@ -90,6 +92,24 @@ export default function RootLayout() {
   useEffect(() => {
     if (error) throw error;
   }, [error]);
+
+  useEffect(() => {
+    const checkInstall = async () => {
+      try {
+        const { supabase } = await import('@/src/lib/supabase');
+        const { data: { session } } = await supabase.auth.getSession();
+        const email = session?.user?.email;
+        // Temporarily disabled AsyncStorage check so it fires every time for testing!
+        await trackSnapchatInstall(email);
+      } catch (err) {
+        console.error('Failed to check snapchat install status:', err);
+      }
+    };
+    
+    if (loaded) {
+      checkInstall();
+    }
+  }, [loaded]);
 
   // In RootLayout, we don't have access to useAuth yet because it's inside the provider.
   // We'll move the SplashScreen hiding to RootLayoutNav instead.
