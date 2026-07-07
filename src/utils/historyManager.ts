@@ -10,9 +10,11 @@ export interface MemeItem {
   caption: string;
   topLines?: string[];
   bottomLines?: string[];
-  createdAt: number;
   style?: string;
   language?: string;
+  rawUrl?: string;
+  aspectRatio?: string;
+  memeLine?: string;
 }
 
 /**
@@ -34,7 +36,9 @@ export const saveMemeToHistory = async (
   style?: string, 
   language?: string,
   topLines?: string[],
-  bottomLines?: string[]
+  bottomLines?: string[],
+  aspectRatio?: string,
+  memeLine?: string
 ): Promise<MemeItem> => {
   try {
     await ensureDirExists();
@@ -60,6 +64,8 @@ export const saveMemeToHistory = async (
       createdAt: timestamp,
       style: style,
       language: language,
+      aspectRatio,
+      memeLine
     };
     
     // 4. Update storage list

@@ -3,7 +3,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { getUserMemes, getUserProfile } from '@/src/services/memeService';
 import { getMemeHistory, MemeItem } from '@/src/utils/historyManager';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { AlertTriangle, ChevronRight, Image as ImageIcon, Menu, Plus, RotateCcw, Search, X, Zap, MessageSquare } from 'lucide-react-native';
+import { AlertTriangle, ChevronRight, Image as ImageIcon, Plus, RotateCcw, Search, X, Zap, MessageSquare } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
@@ -104,7 +104,9 @@ export default function DashboardScreen() {
             createdAt: new Date(m.created_at).getTime(),
             style: m.style,
             language: m.language,
-            rawUrl: m.raw_image_url
+            rawUrl: m.raw_image_url,
+            aspectRatio: m.aspect_ratio,
+            memeLine: m.meme_line
           }));
 
           setMemes(transformed);
@@ -170,6 +172,8 @@ export default function DashboardScreen() {
             style: item.style,
             language: item.language,
             rawUrl: item.rawUrl,
+            aspectRatio: item.aspectRatio,
+            memeLine: item.memeLine,
             isNew: 'false'
           }
         })}

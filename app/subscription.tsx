@@ -1,7 +1,7 @@
 import { Colors } from '@/constants/theme';
 import { AnimatedButton } from '@/src/components/AnimatedButton';
 import { useRouter } from 'expo-router';
-import { Check, Crown, LogOut, Menu, Trash2, X } from 'lucide-react-native';
+import { Check, Crown, LogOut, Trash2, X } from 'lucide-react-native';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInUp, ZoomIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,17 +20,6 @@ export default function SubscriptionScreen() {
 
   const priceLabel = 'Subscription for ₹799INR/mo';
 
-  const handleAccountMenu = () => {
-    showAlert({
-      title: 'Account Settings',
-      message: 'What would you like to do in the fire lab?',
-      type: 'info',
-      buttons: [
-        { text: 'Sign Out', style: 'default', onPress: signOut },
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    });
-  };
 
   const handleLogout = () => {
     showAlert({
@@ -90,8 +79,8 @@ export default function SubscriptionScreen() {
           <X color="#FFF" size={28} />
         </Pressable>
         <Text style={styles.headerTitle}>PREMIUM</Text>
-        <Pressable onPress={handleAccountMenu}>
-          <Menu color="#FFF" size={28} />
+        <Pressable onPress={handleLogout}>
+          <LogOut color="#FFF" size={28} />
         </Pressable>
       </View>
 

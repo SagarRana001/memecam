@@ -53,6 +53,8 @@ export default function ResultScreen() {
   const bottom = Array.isArray(params.bottom) ? params.bottom[0] : params.bottom;
   const initialStyle = Array.isArray(params.style) ? params.style[0] : params.style;
   const initialLanguage = Array.isArray(params.language) ? params.language[0] : params.language;
+  const initialMemeLine = Array.isArray(params.memeLine) ? params.memeLine[0] : params.memeLine;
+  const initialAspectRatio = Array.isArray(params.aspectRatio) ? params.aspectRatio[0] : params.aspectRatio;
   const isNew = Array.isArray(params.isNew) ? params.isNew[0] : params.isNew;
   const rawUrl = Array.isArray(params.rawUrl) ? params.rawUrl[0] : params.rawUrl;
   const isFromDashboard = !isNew || isNew === 'false' || uri?.startsWith('http');
@@ -62,6 +64,8 @@ export default function ResultScreen() {
 
   const [currentStyle, setCurrentStyle] = useState(initialStyle || 'Roast');
   const [currentLanguage, setCurrentLanguage] = useState(initialLanguage || 'Hinglish');
+  const [currentMemeLine, setCurrentMemeLine] = useState(initialMemeLine || 'Bottom');
+  const [currentAspectRatio, setCurrentAspectRatio] = useState(initialAspectRatio || '1:1');
   const {
     stylesList,
     languagesList,
@@ -122,26 +126,28 @@ export default function ResultScreen() {
     storage.setItem('preferred_style', style);
   };
 
-  const triggerAIReload = async (targetStyle: string, targetLang: string) => {
+  const triggerAIReload = async (targetStyle: string, targetLang: string, targetLine: string) => {
     if (!uri || isReloading) return;
     try {
       setIsReloading(true);
       setRecentError(null);
 
-      const newLines = await generateMemeLines(uri, targetStyle, targetLang);
-      setTopLines(newLines.top);
-      setBottomLines(newLines.bottom);
+      const newLines = await generateMemeLines(uri, targetStyle, targetLang, targetLine);
+      setTopLines(newLines.top || []);
+      setBottomLines(newLines.bottom || []);
       setShouldAutoSave(true);
       setIsEditing(true);
       
       if (id) {
-        const fullCaption = [...newLines.top, ...newLines.bottom].join(' ');
+        const fullCaption = [...(newLines.top || []), ...(newLines.bottom || [])].join(' ');
         await updateMemeInHistory(id, {
-          topLines: newLines.top,
-          bottomLines: newLines.bottom,
+          topLines: newLines.top || [],
+          bottomLines: newLines.bottom || [],
           style: targetStyle,
           language: targetLang,
-          caption: fullCaption
+          caption: fullCaption,
+          aspectRatio: currentAspectRatio,
+          memeLine: currentMemeLine
         });
       }
     } catch (error: any) {
@@ -199,7 +205,9 @@ export default function ResultScreen() {
           style: currentStyle,
           language: currentLanguage,
           topLines: topLines,
-          bottomLines: bottomLines
+          bottomLines: bottomLines,
+          aspectRatio: currentAspectRatio,
+          memeLine: currentMemeLine
         }
       });
       
@@ -334,7 +342,7 @@ export default function ResultScreen() {
           </Pressable>
         </View>
 
-        <Pressable onPress={() => triggerAIReload(currentStyle, currentLanguage)} disabled={isReloading} style={styles.reloadButton}>
+        <Pressable onPress={() => triggerAIReload(currentStyle, currentLanguage, currentMemeLine)} disabled={isReloading} style={styles.reloadButton}>
           <RotateCcw color={isReloading ? Colors.dark.muted : Colors.dark.accent} size={28} />
         </Pressable>
       </View>
@@ -346,7 +354,11 @@ export default function ResultScreen() {
         >
           <Animated.View
             entering={FadeIn.duration(600)}
-            style={styles.memeContainer}
+            style={[styles.memeContainer,
+              currentAspectRatio === '16:9' ? { aspectRatio: 9/16 } : 
+              currentAspectRatio === '4:3' ? { aspectRatio: 3/4 } : 
+              { aspectRatio: 1 }
+            ]}
             collapsable={false}
           >
             <Image
@@ -397,7 +409,7 @@ export default function ResultScreen() {
                     <AlertCircle color="#FF4D4D" size={48} />
                     <Text style={[styles.loadingText, { color: '#FF4D4D' }]}>BRAINSTORMING FAILED</Text>
                     <Text style={styles.errorSubtext}>{recentError}</Text>
-                    <Pressable style={styles.retryMiniButton} onPress={() => triggerAIReload(currentStyle, currentLanguage)}>
+                    <Pressable style={styles.retryMiniButton} onPress={() => triggerAIReload(currentStyle, currentLanguage, currentMemeLine)}>
                       <RotateCcw color="#FFF" size={16} />
                       <Text style={styles.retryMiniText}>TRY AGAIN</Text>
                     </Pressable>

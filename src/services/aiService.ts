@@ -18,7 +18,8 @@ export interface MemeLines {
 export const generateMemeLines = async (
   imageUri: string,
   style: string = 'Funny',
-  language: string = 'English'
+  language: string = 'English',
+  memeLine: string = 'Both'
 ): Promise<MemeLines> => {
   if (!OPENROUTER_API_KEY || OPENROUTER_API_KEY === 'your-openrouter-api-key-here') {
     // Fallback if API key is not configured
@@ -84,6 +85,21 @@ export const generateMemeLines = async (
       ? 'Write the captions in internet-fluent English.'
       : `Write the captions natively in ${language} (using its native script).`;
 
+  let formatInstruction = '';
+  let jsonFormat = '';
+  const normalizedMemeLine = memeLine.trim().toLowerCase();
+
+  if (normalizedMemeLine === 'top') {
+    formatInstruction = '- You MUST provide exactly 2 VERY SHORT, concise lines (max 3-5 words per line) for the TOP of the meme.';
+    jsonFormat = '{\n      "top": ["line 1", "line 2"]\n    }';
+  } else if (normalizedMemeLine === 'bottom') {
+    formatInstruction = '- You MUST provide exactly 2 VERY SHORT, concise lines (max 3-5 words per line) for the BOTTOM of the meme.';
+    jsonFormat = '{\n      "bottom": ["line 1", "line 2"]\n    }';
+  } else {
+    formatInstruction = '- You MUST provide exactly 4 VERY SHORT, concise lines (max 3-5 words per line) so they fit perfectly on a meme image without crowding.\n    - Two distinct lines for the TOP of the meme.\n    - Two distinct lines for the BOTTOM of the meme.';
+    jsonFormat = '{\n      "top": ["line 1", "line 2"],\n      "bottom": ["line 3", "line 4"]\n    }';
+  }
+
   const prompt = `
     You are an expert, viral meme creator. Analyze this image and generate a VERY SHORT, incredibly punchy ${style.toUpperCase()} meme caption for it.
     
@@ -93,17 +109,11 @@ export const generateMemeLines = async (
     Rules:
     - Don't be boring. Go all-in on the requested vibe.
     - Keep it internet-authentic. Use meme phrasing where appropriate.
-    - The top lines should build up the situation/context, and the bottom lines should deliver the hilariously unexpected or punchy punchline!
     - Avoid just describing what is literally in the image; instead, use the visual context to create a hilarious situation or reaction!
-    - You MUST provide exactly 4 VERY SHORT, concise lines (max 3-5 words per line) so they fit perfectly on a meme image without crowding.
-    - Two distinct lines for the TOP of the meme.
-    - Two distinct lines for the BOTTOM of the meme.
+    ${formatInstruction}
     
     Return ONLY a valid JSON object with the following structure:
-    {
-      "top": ["line 1", "line 2"],
-      "bottom": ["line 3", "line 4"]
-    }
+    ${jsonFormat}
   `;
 
   // 3. Call OpenRouter API with model fallback
@@ -161,8 +171,8 @@ export const generateMemeLines = async (
         try {
           const parsed = JSON.parse(jsonMatch[0]);
           return {
-            top: Array.isArray(parsed.top) ? parsed.top : [String(parsed.top || ''), ''],
-            bottom: Array.isArray(parsed.bottom) ? parsed.bottom : [String(parsed.bottom || ''), ''],
+            top: parsed.top && Array.isArray(parsed.top) ? parsed.top : [],
+            bottom: parsed.bottom && Array.isArray(parsed.bottom) ? parsed.bottom : [],
           };
         } catch (e) {
           // JSON Parse Error

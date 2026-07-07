@@ -40,6 +40,8 @@ export interface MemeData {
     language?: string;
     topLines?: string[];
     bottomLines?: string[];
+    aspectRatio?: string;
+    memeLine?: string;
   };
 }
 
@@ -106,7 +108,9 @@ export const saveMemeToDb = async (meme: MemeData) => {
         top_lines: meme.metadata?.topLines,
         bottom_lines: meme.metadata?.bottomLines,
         style: meme.metadata?.style,
-        language: meme.metadata?.language
+        language: meme.metadata?.language,
+        aspect_ratio: meme.metadata?.aspectRatio,
+        meme_line: meme.metadata?.memeLine
       }
     ])
     .select()

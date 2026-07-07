@@ -5,22 +5,21 @@ import { ZoomSlider } from '@/src/components/ZoomSlider';
 import { useAlert } from '@/src/context/AlertContext';
 import { useAuth } from '@/src/context/AuthContext';
 import { useBilling } from '@/src/context/BillingContext';
+import { useMemeOptions } from '@/src/hooks/useMemeOptions';
 import { generateMemeLines } from '@/src/services/aiService';
 import { getUserMemeCount } from '@/src/services/memeService';
-import { useMemeOptions } from '@/src/hooks/useMemeOptions';
-import storage from '@/src/utils/storage';
 import { processMemeImage } from '@/src/utils/imageProcessor';
-import { formatTitleCase } from '@/src/utils/stringUtils';
+import storage from '@/src/utils/storage';
+import { useIsFocused } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ChevronDown, Crown, ImagePlus, RotateCcw, X } from 'lucide-react-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useIsFocused } from '@react-navigation/native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeIn, runOnJS, useSharedValue } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 
 
 export default function GeneratorScreen() {
@@ -41,6 +40,12 @@ export default function GeneratorScreen() {
   const [language, setLanguage] = useState('Hinglish');
   const [showStyleModal, setShowStyleModal] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [showRatioModal, setShowRatioModal] = useState(false);
+  const [showLineModal, setShowLineModal] = useState(false);
+
+  const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [memeLine, setMemeLine] = useState('Bottom');
+
   const [isOverLimit, setIsOverLimit] = useState(false);
   const [checkLoading, setCheckLoading] = useState(true);
 
@@ -78,11 +83,17 @@ export default function GeneratorScreen() {
       // Load local preferences
       const savedLang = await storage.getItem('preferred_language');
       if (savedLang) setLanguage(savedLang);
-      
+
       const savedStyle = await storage.getItem('preferred_style');
       if (savedStyle) setStyle(savedStyle);
+
+      const savedRatio = await storage.getItem('preferred_ratio');
+      if (savedRatio) setAspectRatio(savedRatio);
+
+      const savedLine = await storage.getItem('preferred_line');
+      if (savedLine) setMemeLine(savedLine);
     };
-    
+
     loadPreferences();
   }, []);
 
@@ -96,6 +107,15 @@ export default function GeneratorScreen() {
     storage.setItem('preferred_style', selectedStyle);
   };
 
+  const handleRatioSelect = (selectedRatio: string) => {
+    setAspectRatio(selectedRatio);
+    storage.setItem('preferred_ratio', selectedRatio);
+  };
+
+  const handleLineSelect = (selectedLine: string) => {
+    setMemeLine(selectedLine);
+    storage.setItem('preferred_line', selectedLine);
+  };
 
 
   useFocusEffect(
@@ -199,11 +219,11 @@ export default function GeneratorScreen() {
         }
       }
 
-      const processed = await processMemeImage(photo.uri);
+      const processed = await processMemeImage(photo.uri, aspectRatio);
 
       // --- AI GENERATION STEP ---
       setIsGeneratingAI(true);
-      const memeLines = await generateMemeLines(processed.uri, style, language);
+      const memeLines = await generateMemeLines(processed.uri, style, language, memeLine);
       setIsGeneratingAI(false);
 
       // --- SUPABASE PREPARATIONS ---
@@ -216,10 +236,12 @@ export default function GeneratorScreen() {
         params: {
           id: memeId,
           uri: processed.uri,
-          top: JSON.stringify(memeLines.top),
-          bottom: JSON.stringify(memeLines.bottom),
+          top: memeLines.top ? JSON.stringify(memeLines.top) : '[]',
+          bottom: memeLines.bottom ? JSON.stringify(memeLines.bottom) : '[]',
           style,
           language,
+          memeLine,
+          aspectRatio,
           isNew: 'true'
         }
       });
@@ -244,10 +266,14 @@ export default function GeneratorScreen() {
     if (!hasPermission) return;
 
     try {
+      let aspect: [number, number] = [1, 1];
+      if (aspectRatio === '4:3') aspect = [4, 3];
+      if (aspectRatio === '16:9') aspect = [16, 9];
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [1, 1],
+        aspect,
         quality: 1.0,
       });
 
@@ -275,12 +301,12 @@ export default function GeneratorScreen() {
           }
         }
 
-        const processed = await processMemeImage(pickedUri);
+        const processed = await processMemeImage(pickedUri, aspectRatio);
         setCapturedImage(processed.uri);
 
         // --- AI GENERATION STEP ---
         setIsGeneratingAI(true);
-        const memeLines = await generateMemeLines(processed.uri, style, language);
+        const memeLines = await generateMemeLines(processed.uri, style, language, memeLine);
         setIsGeneratingAI(false);
 
         // --- SUPABASE PREPARATIONS ---
@@ -292,10 +318,12 @@ export default function GeneratorScreen() {
           params: {
             id: memeId,
             uri: processed.uri,
-            top: JSON.stringify(memeLines.top),
-            bottom: JSON.stringify(memeLines.bottom),
+            top: memeLines.top ? JSON.stringify(memeLines.top) : '[]',
+            bottom: memeLines.bottom ? JSON.stringify(memeLines.bottom) : '[]',
             style,
             language,
+            memeLine,
+            aspectRatio,
             isNew: 'true'
           }
         });
@@ -354,15 +382,27 @@ export default function GeneratorScreen() {
               <Text style={styles.dropdownText} numberOfLines={1} ellipsizeMode="tail">{language}</Text>
               <ChevronDown color={Colors.dark.accent} size={16} />
             </Pressable>
+            <Pressable onPress={() => setShowRatioModal(true)} style={styles.dropdown}>
+              <Text style={styles.dropdownText} numberOfLines={1} ellipsizeMode="tail">{aspectRatio}</Text>
+              <ChevronDown color={Colors.dark.accent} size={16} />
+            </Pressable>
+            <Pressable onPress={() => setShowLineModal(true)} style={styles.dropdown}>
+              <Text style={styles.dropdownText} numberOfLines={1} ellipsizeMode="tail">{memeLine}</Text>
+              <ChevronDown color={Colors.dark.accent} size={16} />
+            </Pressable>
           </View>
-          <Pressable onPress={() => router.push('/subscription')} style={styles.navButton}>
+          {/* <Pressable onPress={() => router.push('/subscription')} style={styles.navButton}>
             <Crown color={Colors.dark.accent} size={28} fill={Colors.dark.accent} />
-          </Pressable>
+          </Pressable> */}
         </Animated.View>
       </View>
 
       <View style={styles.content}>
-        <View style={styles.cameraContainer}>
+        <View style={[styles.cameraContainer,
+        aspectRatio === '16:9' ? { aspectRatio: 9 / 16 } :
+          aspectRatio === '4:3' ? { aspectRatio: 3 / 4 } :
+            { aspectRatio: 1 }
+        ]}>
           {capturedImage ? (
             <Image source={{ uri: capturedImage }} style={styles.camera} resizeMode="cover" />
           ) : (permission.granted && isFocused) ? (
@@ -468,6 +508,26 @@ export default function GeneratorScreen() {
         onAdd={(newLang) => handleAddLanguage(newLang, handleLanguageSelect, () => setShowLanguageModal(false))}
         addPlaceholder="Add custom language..."
       />
+
+      <SelectionModal
+        visible={showRatioModal}
+        onClose={() => setShowRatioModal(false)}
+        options={[{ name: '1:1' }, { name: '4:3' }, { name: '16:9' }]}
+        selected={aspectRatio}
+        onSelect={handleRatioSelect}
+        title="Select Aspect Ratio"
+        allowAdd={false}
+      />
+
+      <SelectionModal
+        visible={showLineModal}
+        onClose={() => setShowLineModal(false)}
+        options={[{ name: 'Top' }, { name: 'Bottom' }, { name: 'Both' }]}
+        selected={memeLine}
+        onSelect={handleLineSelect}
+        title="Select Meme Line"
+        allowAdd={false}
+      />
     </SafeAreaView>
   );
 }
@@ -553,12 +613,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.05)',
     paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     borderRadius: 20,
     gap: 4,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-    maxWidth: '45%',
+    maxWidth: '28%',
   },
   dropdownText: {
     color: '#FFF',
